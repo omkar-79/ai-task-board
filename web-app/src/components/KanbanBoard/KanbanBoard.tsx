@@ -1,18 +1,19 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 // Temporarily using basic HTML until Chakra UI v3 is properly configured
 import { ColumnComponent } from './ColumnComponent';
+import { TaskModal } from './TaskModal';
 import { KanbanBoardProps, ColumnId, Task } from '@/lib/types';
 import { getColumnColor } from '@/lib/utils';
 
 const COLUMN_CONFIG = [
-  { id: 'Today' as ColumnId, title: 'Today', maxTasks: 5 },
-  { id: 'This Week' as ColumnId, title: 'This Week', maxTasks: 10 },
-  { id: 'Important' as ColumnId, title: 'Important', maxTasks: 8 },
-  { id: 'Daily' as ColumnId, title: 'Daily', maxTasks: 6 },
-  { id: 'Pending' as ColumnId, title: 'Pending', maxTasks: undefined },
-  { id: 'Overdue' as ColumnId, title: 'Overdue', maxTasks: undefined },
+  { id: 'Today' as ColumnId, title: 'Today' },
+  { id: 'This Week' as ColumnId, title: 'This Week' },
+  { id: 'Important' as ColumnId, title: 'Important' },
+  { id: 'Daily' as ColumnId, title: 'Daily' },
+  { id: 'Pending' as ColumnId, title: 'Pending' },
+  { id: 'Overdue' as ColumnId, title: 'Overdue' },
 ];
 
 export const KanbanBoard: React.FC<KanbanBoardProps> = ({
@@ -21,10 +22,31 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   onTaskUpdate,
   onTaskDelete
 }) => {
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
   const getTasksForColumn = (columnId: ColumnId): Task[] => {
     const column = columns.find(col => col.id === columnId);
     return column ? column.tasks : [];
   };
+
+  const handleTaskClick = useCallback((task: Task) => {
+    setSelectedTask(task);
+    setIsModalOpen(true);
+  }, []);
+
+  const handleModalClose = useCallback(() => {
+    setIsModalOpen(false);
+    setSelectedTask(null);
+  }, []);
+
+  const handleTaskUpdate = useCallback((taskId: string, updates: Partial<Task>) => {
+    onTaskUpdate(taskId, updates);
+    // Update the selected task if it's the one being edited
+    if (selectedTask && selectedTask.id === taskId) {
+      setSelectedTask({ ...selectedTask, ...updates });
+    }
+  }, [onTaskUpdate, selectedTask]);
 
   return (
     <div className="w-full py-6 px-4">
@@ -39,8 +61,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
             id: columnConfig.id,
             title: columnConfig.title,
             tasks,
-            color: getColumnColor(columnConfig.id),
-            maxTasks: columnConfig.maxTasks
+            color: getColumnColor(columnConfig.id)
           };
 
           return (
@@ -50,10 +71,20 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
               onTaskMove={onTaskMove}
               onTaskUpdate={onTaskUpdate}
               onTaskDelete={onTaskDelete}
+              onTaskClick={handleTaskClick}
             />
           );
         })}
       </div>
+
+      {/* Single Task Modal */}
+      <TaskModal
+        task={selectedTask}
+        isOpen={isModalOpen}
+        onClose={handleModalClose}
+        onUpdate={handleTaskUpdate}
+        onDelete={onTaskDelete}
+      />
     </div>
   );
 }; 

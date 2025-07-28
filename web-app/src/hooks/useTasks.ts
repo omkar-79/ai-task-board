@@ -14,10 +14,10 @@ import {
 const STORAGE_KEY = 'ai-task-board-tasks';
 
 const INITIAL_COLUMNS: Column[] = [
-  { id: 'Today', title: 'Today', tasks: [], color: getColumnColor('Today'), maxTasks: 5 },
-  { id: 'This Week', title: 'This Week', tasks: [], color: getColumnColor('This Week'), maxTasks: 10 },
-  { id: 'Important', title: 'Important', tasks: [], color: getColumnColor('Important'), maxTasks: 8 },
-  { id: 'Daily', title: 'Daily', tasks: [], color: getColumnColor('Daily'), maxTasks: 6 },
+  { id: 'Today', title: 'Today', tasks: [], color: getColumnColor('Today') },
+  { id: 'This Week', title: 'This Week', tasks: [], color: getColumnColor('This Week') },
+  { id: 'Important', title: 'Important', tasks: [], color: getColumnColor('Important') },
+  { id: 'Daily', title: 'Daily', tasks: [], color: getColumnColor('Daily') },
   { id: 'Pending', title: 'Pending', tasks: [], color: getColumnColor('Pending') },
   { id: 'Overdue', title: 'Overdue', tasks: [], color: getColumnColor('Overdue') },
 ];
@@ -68,6 +68,7 @@ export const useTasks = (): UseTasksReturn => {
       
       const newTask: Task = {
         ...taskForColumnDetermination,
+        status: taskData.status || 'not_complete',
         order: Date.now(), // Simple ordering system
         column: taskData.column || determineTaskColumn(taskForColumnDetermination)
       };

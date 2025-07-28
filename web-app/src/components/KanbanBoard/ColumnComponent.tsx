@@ -11,13 +11,15 @@ interface ColumnComponentProps {
   onTaskMove: (taskId: string, targetColumn: ColumnId, targetIndex: number) => void;
   onTaskUpdate: (taskId: string, updates: Partial<Task>) => void;
   onTaskDelete: (taskId: string) => void;
+  onTaskClick: (task: Task) => void;
 }
 
 export const ColumnComponent: React.FC<ColumnComponentProps> = ({
   column,
   onTaskMove,
   onTaskUpdate,
-  onTaskDelete
+  onTaskDelete,
+  onTaskClick
 }) => {
   const bgColor = 'white';
   const borderColor = 'gray.200';
@@ -37,7 +39,15 @@ export const ColumnComponent: React.FC<ColumnComponentProps> = ({
   });
 
   const isActive = isOver && canDrop;
-  const hasMaxTasks = column.maxTasks && column.tasks.length >= column.maxTasks;
+  const totalDuration = column.tasks.reduce((total, task) => total + task.duration, 0);
+  const formatDuration = (minutes: number) => {
+    if (minutes >= 60) {
+      const hours = Math.floor(minutes / 60);
+      const mins = minutes % 60;
+      return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+    }
+    return `${minutes}m`;
+  };
 
   return (
     <div
@@ -45,7 +55,7 @@ export const ColumnComponent: React.FC<ColumnComponentProps> = ({
       className={`
         bg-white rounded-lg border-2 shadow-sm h-[600px] transition-all duration-200
         ${isActive ? 'border-blue-400' : 'border-gray-200'}
-        ${canDrop && hasMaxTasks ? 'opacity-70' : 'opacity-100'}
+        ${canDrop ? 'opacity-90' : 'opacity-100'}
         hover:shadow-md
       `}
     >
@@ -56,14 +66,11 @@ export const ColumnComponent: React.FC<ColumnComponentProps> = ({
         </h3>
         <div className="flex items-center gap-2">
           <span className="text-xs bg-gray-100 px-2 py-1 rounded">
-            {column.tasks.length}
-            {column.maxTasks && ` / ${column.maxTasks}`}
+            {column.tasks.length} tasks
           </span>
-          {hasMaxTasks && (
-            <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded">
-              Full
-            </span>
-          )}
+          <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
+            {formatDuration(totalDuration)}
+          </span>
         </div>
       </div>
 
@@ -87,6 +94,7 @@ export const ColumnComponent: React.FC<ColumnComponentProps> = ({
                 onUpdate={onTaskUpdate}
                 onDelete={onTaskDelete}
                 onMove={onTaskMove}
+                onClick={onTaskClick}
               />
             ))
         )}

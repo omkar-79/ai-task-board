@@ -1,5 +1,6 @@
 // Task Management Types
 export type TaskType = 'regular' | 'important';
+export type TaskStatus = 'not_complete' | 'in_progress' | 'completed';
 
 export type ColumnId = 'Today' | 'This Week' | 'Important' | 'Daily' | 'Pending' | 'Overdue';
 
@@ -10,6 +11,7 @@ export interface Task {
   deadline?: Date;
   duration: number; // minutes
   type: TaskType;
+  status: TaskStatus;
   column: ColumnId;
   createdAt: Date;
   completedAt?: Date;
@@ -21,7 +23,6 @@ export interface Column {
   title: string;
   tasks: Task[];
   color: string;
-  maxTasks?: number;
 }
 
 // User Profile Types
