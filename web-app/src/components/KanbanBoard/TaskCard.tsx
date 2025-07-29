@@ -1,11 +1,14 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useDrag } from 'react-dnd';
 // Using basic HTML until Chakra UI v3 is properly configured
 import { Task, ColumnId, DragItem, TaskStatus } from '@/lib/types';
 import { format } from 'date-fns';
+import { formatESTDate, getCurrentESTDateTime } from '@/lib/utils';
+import { getCurrentDateTimeInTimezone, createDateInTimezone } from '@/lib/timezone';
 import { TaskModal } from './TaskModal';
+import { useDrag as useDragContext } from '@/contexts/DragContext';
 
 interface TaskCardProps {
   task: Task;
@@ -15,6 +18,7 @@ interface TaskCardProps {
   onDelete: (taskId: string) => void;
   onMove: (taskId: string, targetColumn: ColumnId, targetIndex: number) => void;
   onClick: (task: Task) => void;
+  userTimezone?: string;
 }
 
 export const TaskCard: React.FC<TaskCardProps> = ({
@@ -24,9 +28,11 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   onUpdate,
   onDelete,
   onMove,
-  onClick
+  onClick,
+  userTimezone
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const { setIsDragging } = useDragContext();
   
   const bgColor = 'white';
   const borderColor = 'gray.200';
@@ -45,9 +51,48 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     }),
   });
 
-  const isOverdue = task.deadline && new Date(task.deadline) < new Date() && columnId !== 'Overdue';
-  const daysUntilDeadline = task.deadline ? 
-    Math.ceil((new Date(task.deadline).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)) : null;
+  // Update global drag state
+  useEffect(() => {
+    setIsDragging(isDragging);
+  }, [isDragging, setIsDragging]);
+
+  // Determine the relevant date for overdue calculation
+  const getRelevantDate = (): Date | null => {
+    // Priority 1: Check scheduled date and time
+    if (task.scheduledDate && task.scheduledTime) {
+      return createDateInTimezone(task.scheduledDate, task.scheduledTime, userTimezone || 'America/New_York');
+    }
+    
+    // Priority 2: Check scheduled date only
+    if (task.scheduledDate) {
+      return createDateInTimezone(task.scheduledDate, undefined, userTimezone || 'America/New_York');
+    }
+    
+    // Priority 3: Check deadline
+    if (task.deadline) {
+      return new Date(task.deadline);
+    }
+    
+    return null;
+  };
+
+  const relevantDate = getRelevantDate();
+  const currentDateTime = getCurrentDateTimeInTimezone(userTimezone || 'America/New_York');
+  const isOverdue = relevantDate && relevantDate < currentDateTime;
+  
+  console.log('🔍 TaskCard Debug:', {
+    taskTitle: task.title,
+    userTimezone: userTimezone,
+    currentDateTime: currentDateTime.toISOString(),
+    currentDateTimeLocal: currentDateTime.toLocaleString(),
+    relevantDate: relevantDate?.toISOString(),
+    relevantDateLocal: relevantDate?.toLocaleString(),
+    isOverdue: isOverdue,
+    taskDeadline: task.deadline?.toISOString(),
+    taskDeadlineLocal: task.deadline?.toLocaleString()
+  });
+  const daysUntilDeadline = relevantDate ? 
+    Math.ceil((relevantDate.getTime() - currentDateTime.getTime()) / (1000 * 60 * 60 * 24)) : null;
   const isCompleted = task.status === 'completed';
 
   const handleDelete = () => {
@@ -74,7 +119,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       ref={drag as any}
       onClick={handleCardClick}
       className={`
-        p-3 rounded-md border transition-all duration-200
+        p-2 sm:p-3 rounded-md border transition-all duration-200
         ${isCompleted 
           ? 'bg-green-50 border-green-200 opacity-75' 
           : 'bg-white border-gray-200'
@@ -88,7 +133,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         <div className="flex justify-between items-start">
           <div className="flex flex-col gap-1 flex-1">
             <h4 
-              className={`font-semibold text-sm line-clamp-2 ${
+              className={`font-semibold text-xs sm:text-sm line-clamp-2 ${
                 isCompleted 
                   ? 'text-green-700 line-through' 
                   : isOverdue 
@@ -98,8 +143,28 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             >
               {task.title}
             </h4>
-            
-            {/* Removed tags since column context is clear */}
+            {/* Tags */}
+            <div className="flex gap-2 mt-1">
+              {/* Priority Tag */}
+              <span className={`inline-block text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full border ${
+                (task.priority || 'medium') === 'high' 
+                  ? 'bg-red-100 text-red-700 border-red-200' 
+                  : (task.priority || 'medium') === 'medium'
+                    ? 'bg-yellow-100 text-yellow-800 border-yellow-200'
+                    : 'bg-blue-100 text-blue-700 border-blue-200'
+              }`}>
+                {(task.priority || 'medium').charAt(0).toUpperCase() + (task.priority || 'medium').slice(1)}
+              </span>
+              
+              {/* Label Tag */}
+              <span className="inline-block bg-gray-100 text-gray-700 text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full border border-gray-200">
+                {(task.label || 'general') === 'custom' ? (task.customLabel || 'Custom') : (task.label || 'general').charAt(0).toUpperCase() + (task.label || 'general').slice(1)}
+              </span>
+              
+              {isOverdue && columnId !== 'Overdue' && (
+                <span className="inline-block bg-yellow-100 text-yellow-800 text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full border border-yellow-200">Overdue</span>
+              )}
+            </div>
           </div>
 
           <div className="flex gap-1">
@@ -107,9 +172,9 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           </div>
         </div>
 
-        {/* Task Details and Status */}
-        <div className="flex justify-between items-center text-xs text-gray-600 task-card-content">
-          <div className="flex gap-3">
+        {/* Task Details */}
+        <div className="flex gap-3 text-xs text-gray-600 task-card-content">
+          {task.duration && (
             <div className="flex gap-1 items-center">
               <span>⏱</span>
               <span>
@@ -119,16 +184,74 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 }
               </span>
             </div>
+          )}
 
-            {task.deadline && (
-              <div className="flex gap-1 items-center">
-                <span>📅</span>
-                <span>{format(new Date(task.deadline), 'MMM dd')}</span>
-              </div>
-            )}
-          </div>
+          {/* Time/Date Display based on column */}
+          {(() => {
+            const isTodayColumn = columnId === 'Today';
+            
+            // Priority 1: Show scheduled time/date if it exists
+            if (task.scheduledDate && task.scheduledTime) {
+              const scheduledDate = new Date(task.scheduledDate + 'T' + task.scheduledTime);
+              if (isTodayColumn) {
+                return (
+                  <div className="flex gap-1 items-center">
+                    <span>🕐</span>
+                    <span>Scheduled task at: {scheduledDate.toLocaleTimeString('en-US', { 
+                      hour: 'numeric', 
+                      minute: '2-digit',
+                      hour12: true 
+                    })}</span>
+                  </div>
+                );
+              } else {
+                return (
+                  <div className="flex gap-1 items-center">
+                    <span>📅</span>
+                    <span>Scheduled task at: {scheduledDate.toLocaleDateString('en-US', { 
+                      month: 'short', 
+                      day: 'numeric',
+                      year: 'numeric'
+                    })}</span>
+                  </div>
+                );
+              }
+            }
+            
+            // Priority 2: Show deadline time/date if it exists
+            if (task.deadline) {
+              const deadlineDate = new Date(task.deadline);
+              if (isTodayColumn) {
+                return (
+                  <div className="flex gap-1 items-center">
+                    <span>📅</span>
+                    <span>Deadline: {deadlineDate.toLocaleTimeString('en-US', { 
+                      hour: 'numeric', 
+                      minute: '2-digit',
+                      hour12: true 
+                    })}</span>
+                  </div>
+                );
+              } else {
+                return (
+                  <div className="flex gap-1 items-center">
+                    <span>📅</span>
+                    <span>Deadline: {deadlineDate.toLocaleDateString('en-US', { 
+                      month: 'short', 
+                      day: 'numeric',
+                      year: 'numeric'
+                    })}</span>
+                  </div>
+                );
+              }
+            }
+            
+            return null;
+          })()}
+        </div>
 
-          {/* Status Dropdown */}
+        {/* Status Dropdown */}
+        <div className="flex justify-start mt-2">
           <select
             value={task.status}
             onChange={(e) => {
@@ -142,7 +265,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               }
               onUpdate(task.id, updates);
             }}
-            className="text-xs px-2 py-1 border border-gray-300 rounded bg-white hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="text-xs px-3 py-1 border border-gray-300 rounded-md bg-white hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors duration-200"
             onClick={(e) => e.stopPropagation()}
           >
             <option value="not_complete">Not Complete</option>

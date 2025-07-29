@@ -14,9 +14,9 @@ TASK CATEGORIZATION RULES:
 - "Today": Tasks with deadline today or urgent tasks that should be done today
 - "This Week": Tasks with deadline within current week 
 - "Important": Tasks marked as important type, regardless of deadline
-- "Daily": Recurring daily tasks or routine activities
+
 - "Pending": Tasks without specific deadline or low priority
-- "Overdue": Tasks with deadline in the past
+
 
 TASK SUGGESTION RULES:
 - Prioritize important tasks first
@@ -41,7 +41,7 @@ const FUNCTION_DECLARATIONS = [
         },
         targetColumn: {
           type: SchemaType.STRING,
-          enum: ['Today', 'This Week', 'Important', 'Daily', 'Pending', 'Overdue'],
+          enum: ['Today', 'This Week', 'Important', 'Pending'],
           description: 'Target column for the task'
         },
         reasoning: {

@@ -3,144 +3,168 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Task, Column, ColumnId, UseTasksReturn } from '@/lib/types';
 import { 
-  generateId, 
   determineTaskColumn, 
   getColumnColor, 
-  saveToLocalStorage, 
-  loadFromLocalStorage,
   filterTasksByColumn 
 } from '@/lib/utils';
-
-const STORAGE_KEY = 'ai-task-board-tasks';
+import { sortTasksForColumn } from '@/lib/sorting';
+import { taskService } from '@/lib/database';
+import { useAuth } from '@/contexts/AuthContext';
 
 const INITIAL_COLUMNS: Column[] = [
   { id: 'Today', title: 'Today', tasks: [], color: getColumnColor('Today') },
   { id: 'This Week', title: 'This Week', tasks: [], color: getColumnColor('This Week') },
-  { id: 'Important', title: 'Important', tasks: [], color: getColumnColor('Important') },
-  { id: 'Daily', title: 'Daily', tasks: [], color: getColumnColor('Daily') },
-  { id: 'Pending', title: 'Pending', tasks: [], color: getColumnColor('Pending') },
+  { id: 'Upcoming task', title: 'Upcoming task', tasks: [], color: getColumnColor('Upcoming task') },
   { id: 'Overdue', title: 'Overdue', tasks: [], color: getColumnColor('Overdue') },
 ];
 
-export const useTasks = (): UseTasksReturn => {
+export const useTasks = (userTimezone: string = 'America/New_York'): UseTasksReturn => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [columns, setColumns] = useState<Column[]>(INITIAL_COLUMNS);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { user } = useAuth();
 
-  // Load tasks from localStorage on mount
+  // Load tasks from database on mount and when user changes
   useEffect(() => {
-    try {
-      const savedTasks = loadFromLocalStorage<Task[]>(STORAGE_KEY, []);
-      setTasks(savedTasks);
+    if (!user) {
+      setTasks([]);
       setLoading(false);
-    } catch (err) {
-      setError('Failed to load tasks from storage');
-      setLoading(false);
+      return;
     }
-  }, []);
+
+    const loadTasks = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const fetchedTasks = await taskService.getTasks(user.id);
+        setTasks(fetchedTasks);
+      } catch (err) {
+        console.error('Error loading tasks:', err);
+        setError('Failed to load tasks from database');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadTasks();
+  }, [user]);
 
   // Update columns whenever tasks change
   useEffect(() => {
     const updatedColumns = INITIAL_COLUMNS.map(column => ({
       ...column,
-      tasks: filterTasksByColumn(tasks, column.id)
-        .sort((a, b) => a.order - b.order)
+      tasks: sortTasksForColumn(filterTasksByColumn(tasks, column.id), column.id, userTimezone)
     }));
     setColumns(updatedColumns);
-  }, [tasks]);
+  }, [tasks, userTimezone]);
 
-  // Save tasks to localStorage whenever tasks change
-  useEffect(() => {
-    if (!loading) {
-      saveToLocalStorage(STORAGE_KEY, tasks);
+  const addTask = useCallback(async (taskData: Omit<Task, 'id' | 'createdAt' | 'order'>) => {
+    if (!user) {
+      setError('User not authenticated');
+      return;
     }
-  }, [tasks, loading]);
 
-  const addTask = useCallback((taskData: Omit<Task, 'id' | 'createdAt' | 'order'>) => {
     try {
+      console.log('Adding task with data:', taskData);
+      setError(null);
       const taskForColumnDetermination = {
         ...taskData,
-        id: generateId(),
-        createdAt: new Date(),
-        order: 0
+        status: taskData.status || 'not_complete',
+        column: taskData.column || determineTaskColumn(taskData, userTimezone)
       };
       
-      const newTask: Task = {
-        ...taskForColumnDetermination,
-        status: taskData.status || 'not_complete',
-        order: Date.now(), // Simple ordering system
-        column: taskData.column || determineTaskColumn(taskForColumnDetermination)
-      };
-
+      console.log('Task for column determination:', taskForColumnDetermination);
+      const newTask = await taskService.createTask(taskForColumnDetermination, user.id);
+      console.log('Successfully created task:', newTask);
       setTasks(prev => [...prev, newTask]);
-      setError(null);
     } catch (err) {
-      setError('Failed to add task');
+      console.error('Error adding task:', err);
+      setError('Failed to add task to database');
+      throw err; // Re-throw so the UI can handle it
     }
-  }, []);
+  }, [user]);
 
-  const updateTask = useCallback((taskId: string, updates: Partial<Task>) => {
+  const updateTask = useCallback(async (taskId: string, updates: Partial<Task>) => {
+    if (!user) {
+      setError('User not authenticated');
+      return;
+    }
+
     try {
+      setError(null);
+      const updatedTask = await taskService.updateTask(taskId, updates, user.id);
       setTasks(prev => prev.map(task => 
-        task.id === taskId 
-          ? { ...task, ...updates }
-          : task
+        task.id === taskId ? updatedTask : task
       ));
-      setError(null);
     } catch (err) {
-      setError('Failed to update task');
+      console.error('Error updating task:', err);
+      setError('Failed to update task in database');
     }
-  }, []);
+  }, [user]);
 
-  const deleteTask = useCallback((taskId: string) => {
+  const deleteTask = useCallback(async (taskId: string) => {
+    if (!user) {
+      setError('User not authenticated');
+      return;
+    }
+
     try {
+      setError(null);
+      await taskService.deleteTask(taskId, user.id);
       setTasks(prev => prev.filter(task => task.id !== taskId));
-      setError(null);
     } catch (err) {
-      setError('Failed to delete task');
+      console.error('Error deleting task:', err);
+      setError('Failed to delete task from database');
     }
-  }, []);
+  }, [user]);
 
-  const moveTask = useCallback((taskId: string, targetColumn: ColumnId, targetIndex: number) => {
+  const moveTask = useCallback(async (taskId: string, targetColumn: ColumnId, targetIndex: number) => {
+    if (!user) {
+      setError('User not authenticated');
+      return;
+    }
+
     try {
-      setTasks(prev => {
-        const taskToMove = prev.find(task => task.id === taskId);
-        if (!taskToMove) return prev;
-
-        // Remove task from current position
-        const otherTasks = prev.filter(task => task.id !== taskId);
-        
-        // Get tasks in target column
-        const targetColumnTasks = filterTasksByColumn(otherTasks, targetColumn)
-          .sort((a, b) => a.order - b.order);
-
-        // Calculate new order
-        let newOrder: number;
-        if (targetIndex === 0) {
-          newOrder = targetColumnTasks.length > 0 ? targetColumnTasks[0].order - 1 : Date.now();
-        } else if (targetIndex >= targetColumnTasks.length) {
-          newOrder = targetColumnTasks.length > 0 ? targetColumnTasks[targetColumnTasks.length - 1].order + 1 : Date.now();
-        } else {
-          const prevOrder = targetColumnTasks[targetIndex - 1].order;
-          const nextOrder = targetColumnTasks[targetIndex].order;
-          newOrder = (prevOrder + nextOrder) / 2;
-        }
-
-        // Update the task
-        const updatedTask = {
-          ...taskToMove,
-          column: targetColumn,
-          order: newOrder
-        };
-
-        return [...otherTasks, updatedTask];
-      });
       setError(null);
+      
+      // Get current tasks in target column
+      const targetColumnTasks = sortTasksForColumn(filterTasksByColumn(tasks, targetColumn), targetColumn);
+
+      // Calculate new order
+      let newOrder: number;
+      if (targetIndex === 0) {
+        newOrder = targetColumnTasks.length > 0 ? targetColumnTasks[0].order - 1 : Date.now();
+      } else if (targetIndex >= targetColumnTasks.length) {
+        newOrder = targetColumnTasks.length > 0 ? targetColumnTasks[targetColumnTasks.length - 1].order + 1 : Date.now();
+      } else {
+        const prevOrder = targetColumnTasks[targetIndex - 1].order;
+        const nextOrder = targetColumnTasks[targetIndex].order;
+        newOrder = (prevOrder + nextOrder) / 2;
+      }
+
+      // Find the current task to preserve all its data
+      const currentTask = tasks.find(task => task.id === taskId);
+      if (!currentTask) {
+        throw new Error('Task not found');
+      }
+
+      // Update task in database with all existing data plus new column and order
+      const updatedTask = await taskService.updateTask(taskId, {
+        ...currentTask,
+        column: targetColumn,
+        order: newOrder
+      }, user.id);
+
+      // Update local state
+      setTasks(prev => prev.map(task => 
+        task.id === taskId ? updatedTask : task
+      ));
     } catch (err) {
-      setError('Failed to move task');
+      console.error('Error moving task:', err);
+      setError('Failed to move task in database');
     }
-  }, []);
+  }, [user, tasks]);
 
   const getTasksByColumn = useCallback((columnId: ColumnId): Task[] => {
     return filterTasksByColumn(tasks, columnId);

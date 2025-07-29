@@ -1,21 +1,30 @@
 // Task Management Types
-export type TaskType = 'regular' | 'important';
+export type TaskPriority = 'high' | 'medium' | 'low';
+export type TaskRecurrence = 'once' | 'everyday' | 'everyweek';
 export type TaskStatus = 'not_complete' | 'in_progress' | 'completed';
+export type TaskLabel = 'general' | 'work' | 'study' | 'custom';
 
-export type ColumnId = 'Today' | 'This Week' | 'Important' | 'Daily' | 'Pending' | 'Overdue';
+export type ColumnId = 'Today' | 'This Week' | 'Upcoming task' | 'Overdue';
 
 export interface Task {
   id: string;
   title: string;
   description?: string;
   deadline?: Date;
-  duration: number; // minutes
-  type: TaskType;
+  duration?: number; // minutes - now optional
+  priority: TaskPriority;
+  label: TaskLabel;
+  customLabel?: string; // for custom labels
   status: TaskStatus;
   column: ColumnId;
   createdAt: Date;
   completedAt?: Date;
   order: number; // for drag and drop ordering
+  recurrence?: TaskRecurrence;
+  recurrenceDay?: string; // for weekly tasks
+  recurrenceTime?: string; // for weekly tasks
+  scheduledDate?: string; // for "Once" tasks - when user wants to do it
+  scheduledTime?: string; // for "Once" tasks - when user wants to do it
 }
 
 export interface Column {
@@ -49,7 +58,7 @@ export interface UserProfile {
     saturday: DaySchedule;
     sunday: DaySchedule;
   };
-  timezone?: string;
+  timezone: string;
 }
 
 // Gemini AI Types
@@ -94,6 +103,8 @@ export interface KanbanBoardProps {
   onTaskMove: (taskId: string, targetColumn: ColumnId, targetIndex: number) => void;
   onTaskUpdate: (taskId: string, updates: Partial<Task>) => void;
   onTaskDelete: (taskId: string) => void;
+  onAddTask: (taskData: Omit<Task, 'id' | 'createdAt' | 'order'>) => Promise<void>;
+  userTimezone?: string;
 }
 
 export interface TaskInputProps {
@@ -111,10 +122,10 @@ export interface ProfileSectionProps {
 export interface UseTasksReturn {
   tasks: Task[];
   columns: Column[];
-  addTask: (task: Omit<Task, 'id' | 'createdAt' | 'order'>) => void;
-  updateTask: (taskId: string, updates: Partial<Task>) => void;
-  deleteTask: (taskId: string) => void;
-  moveTask: (taskId: string, targetColumn: ColumnId, targetIndex: number) => void;
+  addTask: (task: Omit<Task, 'id' | 'createdAt' | 'order'>) => Promise<void>;
+  updateTask: (taskId: string, updates: Partial<Task>) => Promise<void>;
+  deleteTask: (taskId: string) => Promise<void>;
+  moveTask: (taskId: string, targetColumn: ColumnId, targetIndex: number) => Promise<void>;
   getTasksByColumn: (columnId: ColumnId) => Task[];
   loading: boolean;
   error: string | null;
