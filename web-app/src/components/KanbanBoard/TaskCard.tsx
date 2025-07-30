@@ -9,11 +9,13 @@ import { formatESTDate, getCurrentESTDateTime } from '@/lib/utils';
 import { getCurrentDateTimeInTimezone, createDateInTimezone } from '@/lib/timezone';
 import { TaskModal } from './TaskModal';
 import { useDrag as useDragContext } from '@/contexts/DragContext';
+import { isBigFrogTask } from '@/lib/bigFrog';
 
 interface TaskCardProps {
   task: Task;
   index: number;
   columnId: ColumnId;
+  columnTasks: Task[]; // Add this to check Big Frog status
   onUpdate: (taskId: string, updates: Partial<Task>) => void;
   onDelete: (taskId: string) => void;
   onMove: (taskId: string, targetColumn: ColumnId, targetIndex: number) => void;
@@ -25,6 +27,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   task,
   index,
   columnId,
+  columnTasks,
   onUpdate,
   onDelete,
   onMove,
@@ -94,6 +97,9 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   const daysUntilDeadline = relevantDate ? 
     Math.ceil((relevantDate.getTime() - currentDateTime.getTime()) / (1000 * 60 * 60 * 24)) : null;
   const isCompleted = task.status === 'completed';
+  
+  // Check if this task is the Big Frog
+  const isBigFrog = isBigFrogTask(task, columnTasks, columnId);
 
   const handleDelete = () => {
     if (window.confirm('Are you sure you want to delete this task?')) {
@@ -130,7 +136,16 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     >
       {/* Task Header */}
       <div className="flex flex-col gap-2 task-card-content">
-        <div className="flex justify-between items-start">
+        <div className="flex justify-between items-start relative">
+          {isBigFrog && (
+            <div className="absolute -top-1 -right-1 z-10" title="🐸 Big Frog - Most important task in this column">
+              <img 
+                src="/images/frog.png" 
+                alt="Big Frog" 
+                className="w-6 h-6 animate-bounce drop-shadow-lg"
+              />
+            </div>
+          )}
           <div className="flex flex-col gap-1 flex-1">
             <h4 
               className={`font-semibold text-xs sm:text-sm line-clamp-2 ${

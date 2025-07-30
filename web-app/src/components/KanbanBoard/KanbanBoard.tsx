@@ -48,11 +48,22 @@ const KanbanBoardContent: React.FC<KanbanBoardProps> = ({
     setSelectedTask(null);
   }, []);
 
-  const handleTaskUpdate = useCallback((taskId: string, updates: Partial<Task>) => {
-    onTaskUpdate(taskId, updates);
-    // Update the selected task if it's the one being edited
-    if (selectedTask && selectedTask.id === taskId) {
-      setSelectedTask({ ...selectedTask, ...updates });
+  const handleTaskUpdate = useCallback(async (taskId: string, updates: Partial<Task>) => {
+    console.log('KanbanBoard: handleTaskUpdate called');
+    console.log('KanbanBoard: taskId:', taskId);
+    console.log('KanbanBoard: updates:', updates);
+    
+    try {
+      await onTaskUpdate(taskId, updates);
+      console.log('KanbanBoard: onTaskUpdate completed');
+      
+      // Update the selected task if it's the one being edited
+      if (selectedTask && selectedTask.id === taskId) {
+        setSelectedTask({ ...selectedTask, ...updates });
+        console.log('KanbanBoard: updated selectedTask');
+      }
+    } catch (error) {
+      console.error('KanbanBoard: Error in handleTaskUpdate:', error);
     }
   }, [onTaskUpdate, selectedTask]);
 
@@ -121,6 +132,7 @@ const KanbanBoardContent: React.FC<KanbanBoardProps> = ({
         onClose={handleModalClose}
         onUpdate={handleTaskUpdate}
         onDelete={onTaskDelete}
+        userTimezone={userTimezone}
       />
 
                         {/* Add Task Modal */}

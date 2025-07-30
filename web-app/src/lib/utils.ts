@@ -334,7 +334,7 @@ export const getCurrentFreeTime = (profile: UserProfile): { available: boolean; 
 
 // Task Filtering and Sorting
 export const filterTasksByColumn = (tasks: Task[], columnId: ColumnId): Task[] => {
-  return tasks.filter(task => task.column === columnId);
+  return tasks.filter(task => task.column === columnId && task.status !== 'completed');
 };
 
 // Import sorting functions from dedicated module
@@ -343,7 +343,8 @@ export { sortTasksByPriority } from './sorting';
 export const getTasksForSuggestion = (tasks: Task[], availableMinutes: number): Task[] => {
   const pendingTasks = tasks.filter(task => 
     (task.column === 'Overdue' || task.column === 'Upcoming task') && 
-    (task.duration || 0) <= availableMinutes
+    (task.duration || 0) <= availableMinutes &&
+    task.status !== 'completed'
   );
 
   return sortTasksByPriority(pendingTasks);

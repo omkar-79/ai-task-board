@@ -1,0 +1,28 @@
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Frog body -->
+  <ellipse cx="12" cy="14" rx="8" ry="6" fill="#4ade80" stroke="#22c55e" stroke-width="1"/>
+  
+  <!-- Frog head -->
+  <circle cx="12" cy="8" r="5" fill="#4ade80" stroke="#22c55e" stroke-width="1"/>
+  
+  <!-- Eyes -->
+  <circle cx="10" cy="7" r="1.5" fill="#1f2937"/>
+  <circle cx="14" cy="7" r="1.5" fill="#1f2937"/>
+  <circle cx="10.5" cy="6.5" r="0.5" fill="white"/>
+  <circle cx="14.5" cy="6.5" r="0.5" fill="white"/>
+  
+  <!-- Nostrils -->
+  <circle cx="11" cy="9" r="0.3" fill="#1f2937"/>
+  <circle cx="13" cy="9" r="0.3" fill="#1f2937"/>
+  
+  <!-- Mouth -->
+  <path d="M 10 10 Q 12 11 14 10" stroke="#1f2937" stroke-width="0.5" fill="none"/>
+  
+  <!-- Legs -->
+  <ellipse cx="8" cy="18" rx="2" ry="1" fill="#4ade80" stroke="#22c55e" stroke-width="0.5"/>
+  <ellipse cx="16" cy="18" rx="2" ry="1" fill="#4ade80" stroke="#22c55e" stroke-width="0.5"/>
+  
+  <!-- Front legs -->
+  <ellipse cx="9" cy="16" rx="1.5" ry="0.8" fill="#4ade80" stroke="#22c55e" stroke-width="0.5"/>
+  <ellipse cx="15" cy="16" rx="1.5" ry="0.8" fill="#4ade80" stroke="#22c55e" stroke-width="0.5"/>
+</svg> 

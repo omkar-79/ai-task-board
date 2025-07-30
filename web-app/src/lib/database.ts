@@ -331,7 +331,8 @@ export const profileService = {
       return {
         id: data.id,
         schedule: data.schedule,
-        timezone: data.timezone || getUserTimezone()
+        timezone: data.timezone || getUserTimezone(),
+        backgroundImage: data.background_image || undefined
       }
     } catch (err) {
       console.error('Exception in getUserProfile:', err)
@@ -362,7 +363,8 @@ export const profileService = {
       return {
         id: data.id,
         schedule: data.schedule,
-        timezone: data.timezone || getUserTimezone()
+        timezone: data.timezone || getUserTimezone(),
+        backgroundImage: data.background_image || undefined
       }
     } catch (err) {
       console.error('Exception in upsertUserProfile:', err)
@@ -373,11 +375,15 @@ export const profileService = {
   // Update user profile
   async updateUserProfile(userId: string, schedule: any): Promise<UserProfile> {
     console.log('Updating profile for user:', userId)
+    console.log('Schedule data:', schedule)
     
     try {
       const { data, error } = await supabase
         .from('user_profiles')
-        .update({ schedule })
+        .update({ 
+          schedule,
+          background_image: schedule.backgroundImage || 'default'
+        })
         .eq('user_id', userId)
         .select()
         .single()
@@ -390,7 +396,8 @@ export const profileService = {
       return {
         id: data.id,
         schedule: data.schedule,
-        timezone: data.timezone || getUserTimezone()
+        timezone: data.timezone || getUserTimezone(),
+        backgroundImage: data.background_image || undefined
       }
     } catch (err) {
       console.error('Exception in updateUserProfile:', err)

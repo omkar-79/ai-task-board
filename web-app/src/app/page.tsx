@@ -7,13 +7,18 @@ import { Providers } from '@/components/Providers';
 import { useAuth } from '@/contexts/AuthContext';
 import { AuthContainer } from '@/components/auth/AuthContainer';
 import { SettingsPage } from '@/components/settings/SettingsPage';
+import { BigFrogInfo } from '@/components/KanbanBoard/BigFrogInfo';
 import { profileService } from '@/lib/database';
 import { getUserTimezone } from '@/lib/timezone';
+import { getBigFrogTasks } from '@/lib/bigFrog';
+import Link from 'next/link';
 
 export default function Dashboard() {
   const { user, loading: authLoading } = useAuth();
   const [userTimezone, setUserTimezone] = useState<string>('America/New_York');
+  const [backgroundImage, setBackgroundImage] = useState<string>('default');
   const [showSettings, setShowSettings] = useState(false);
+  const [settingsKey, setSettingsKey] = useState(0); // Force re-render when settings change
   
   const { 
     columns, 
@@ -25,27 +30,37 @@ export default function Dashboard() {
     error 
   } = useTasks(userTimezone);
 
-  // Load user timezone on mount
+  // Load user settings on mount and when settings change
   useEffect(() => {
     if (user) {
-      loadUserTimezone();
+      loadUserSettings();
     }
-  }, [user]);
+  }, [user, settingsKey]);
 
-  const loadUserTimezone = async () => {
+  // Debug background changes
+  useEffect(() => {
+    console.log('Background changed to:', backgroundImage);
+  }, [backgroundImage]);
+
+  const loadUserSettings = async () => {
     if (!user) return;
 
     try {
       const profile = await profileService.getUserProfile(user.id);
       if (profile) {
         setUserTimezone(profile.timezone);
+        const newBackground = profile.backgroundImage || 'default';
+        console.log('Loading background:', newBackground);
+        setBackgroundImage(newBackground);
       } else {
         // Set default timezone if no profile exists
         setUserTimezone(getUserTimezone());
+        setBackgroundImage('default');
       }
     } catch (error) {
-      console.error('Error loading user timezone:', error);
+      console.error('Error loading user settings:', error);
       setUserTimezone(getUserTimezone());
+      setBackgroundImage('default');
     }
   };
 
@@ -79,22 +94,35 @@ export default function Dashboard() {
 
   return (
     <Providers>
-      <div className="min-h-screen bg-gray-50">
+      <div 
+        className="min-h-screen"
+        style={{
+          backgroundImage: backgroundImage !== 'default' ? `url(/images/background/${backgroundImage})` : undefined,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundAttachment: 'fixed',
+          backgroundColor: backgroundImage === 'default' ? '#f9fafb' : undefined
+        }}
+      >
         <div className="w-full py-4 sm:py-6 px-2 sm:px-4">
           {/* Header with user info and logout */}
           <div className="flex justify-between items-center mb-6">
             <div>
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-800">
-                AI Task Board
+                Karya
               </h1>
-              <p className="text-base sm:text-lg text-gray-600">
-                Smart personal task management with AI-powered categorization
-              </p>
+
             </div>
             <div className="flex items-center space-x-4">
               <span className="text-sm text-gray-600">
                 Welcome, {user.email}
               </span>
+              <Link
+                href="/profile"
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500"
+              >
+                👤 Profile
+              </Link>
               <button
                 onClick={() => setShowSettings(true)}
                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500"
@@ -116,6 +144,9 @@ export default function Dashboard() {
             </div>
           )}
 
+          {/* Big Frog Info */}
+          <BigFrogInfo bigFrogTasks={getBigFrogTasks(columns)} />
+
           <KanbanBoard
             columns={columns}
             onTaskMove={moveTask}
@@ -126,7 +157,10 @@ export default function Dashboard() {
           />
 
           {showSettings && (
-            <SettingsPage onClose={() => setShowSettings(false)} />
+            <SettingsPage 
+              onClose={() => setShowSettings(false)}
+              onSettingsChange={() => setSettingsKey(prev => prev + 1)}
+          />
           )}
 
           <div className="mt-6 sm:mt-8 p-4 sm:p-6 bg-white rounded-lg shadow-sm">

@@ -6,6 +6,7 @@ import { useDrop } from 'react-dnd';
 import { TaskCard } from './TaskCard';
 import { Column, ColumnId, DragItem, Task } from '@/lib/types';
 import { sortTasksForColumn } from '@/lib/sorting';
+import { determineBigFrogTask } from '@/lib/bigFrog';
 
 interface ColumnComponentProps {
   column: Column;
@@ -54,6 +55,9 @@ export const ColumnComponent: React.FC<ColumnComponentProps> = ({
     }
     return `${minutes}m`;
   };
+  
+  // Check if this column has a Big Frog task
+  const bigFrogTask = determineBigFrogTask(column.tasks, column.id);
 
   return (
     <div
@@ -96,6 +100,7 @@ export const ColumnComponent: React.FC<ColumnComponentProps> = ({
                 task={task}
                 index={index}
                 columnId={column.id}
+                columnTasks={column.tasks}
                 onUpdate={onTaskUpdate}
                 onDelete={onTaskDelete}
                 onMove={onTaskMove}

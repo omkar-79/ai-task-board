@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Task, ColumnId, TaskStatus } from '@/lib/types';
+import { Task, ColumnId, TaskStatus, TaskPriority, TaskLabel } from '@/lib/types';
 import { format } from 'date-fns';
 
 interface TaskModalProps {
@@ -10,6 +10,7 @@ interface TaskModalProps {
   onClose: () => void;
   onUpdate: (taskId: string, updates: Partial<Task>) => void;
   onDelete: (taskId: string) => void;
+  userTimezone?: string;
 }
 
 export const TaskModal: React.FC<TaskModalProps> = ({
@@ -17,34 +18,53 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   isOpen,
   onClose,
   onUpdate,
-  onDelete
+  onDelete,
+  userTimezone
 }) => {
+  console.log('TaskModal: Component rendered, task:', task?.id);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
     duration: 0,
     hours: 0,
     minutes: 0,
-    type: 'regular' as 'regular' | 'important',
+    priority: 'medium' as TaskPriority,
+    label: 'general' as TaskLabel,
+    customLabel: '',
     status: 'not_complete' as TaskStatus,
     deadline: '',
-    column: 'Today' as ColumnId
+    deadlineTime: '',
+    scheduledDate: '',
+    scheduledTime: '',
+    recurrence: 'once' as 'once' | 'everyday' | 'everyweek',
+    recurrenceDay: '',
+    recurrenceTime: ''
   });
+
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     if (task) {
-      const hours = Math.floor(task.duration / 60);
-      const minutes = task.duration % 60;
+      const hours = Math.floor((task.duration || 0) / 60);
+      const minutes = (task.duration || 0) % 60;
+      
       setFormData({
         title: task.title,
         description: task.description || '',
-        duration: task.duration,
+        duration: task.duration || 0,
         hours,
         minutes,
-        type: task.type,
+        priority: task.priority || 'medium',
+        label: task.label || 'general',
+        customLabel: task.customLabel || '',
         status: task.status || 'not_complete',
         deadline: task.deadline ? format(new Date(task.deadline), 'yyyy-MM-dd') : '',
-        column: task.column
+        deadlineTime: task.deadline ? format(new Date(task.deadline), 'HH:mm') : '',
+        scheduledDate: task.scheduledDate || '',
+        scheduledTime: task.scheduledTime || '',
+        recurrence: task.recurrence || 'once',
+        recurrenceDay: task.recurrenceDay || '',
+        recurrenceTime: task.recurrenceTime || ''
       });
     }
   }, [task]);
@@ -66,21 +86,56 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     return null;
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    console.log('TaskModal: handleSubmit STARTED');
     e.preventDefault();
     e.stopPropagation();
-    const totalMinutes = (formData.hours * 60) + formData.minutes;
-    const updates: Partial<Task> = {
-      title: formData.title,
-      description: formData.description,
-      duration: totalMinutes,
-      type: formData.type,
-      status: formData.status,
-      deadline: formData.deadline ? new Date(formData.deadline) : undefined,
-      column: formData.column
-    };
-    onUpdate(task.id, updates);
-    onClose();
+    
+    console.log('TaskModal: handleSubmit called');
+    console.log('TaskModal: formData:', formData);
+    console.log('TaskModal: form valid:', (e.target as HTMLFormElement).checkValidity());
+    
+    setIsLoading(true);
+    
+    try {
+      const totalMinutes = (formData.hours * 60) + formData.minutes;
+      
+      // Create deadline date if both date and time are provided
+      let deadline: Date | undefined = undefined;
+      if (formData.deadline && formData.deadlineTime) {
+        deadline = new Date(`${formData.deadline}T${formData.deadlineTime}`);
+      } else if (formData.deadline) {
+        deadline = new Date(formData.deadline);
+      }
+
+      const updates: Partial<Task> = {
+        title: formData.title,
+        description: formData.description,
+        duration: totalMinutes > 0 ? totalMinutes : undefined,
+        priority: formData.priority,
+        label: formData.label,
+        customLabel: formData.label === 'custom' ? formData.customLabel : undefined,
+        status: formData.status,
+        deadline,
+        scheduledDate: formData.scheduledDate || undefined,
+        scheduledTime: formData.scheduledTime || undefined,
+        recurrence: formData.recurrence,
+        recurrenceDay: formData.recurrenceDay || undefined,
+        recurrenceTime: formData.recurrenceTime || undefined
+      };
+
+      console.log('TaskModal: updates to be sent:', updates);
+      console.log('TaskModal: calling onUpdate with taskId:', task.id);
+
+      await onUpdate(task.id, updates);
+      
+      console.log('TaskModal: onUpdate completed successfully');
+      onClose();
+    } catch (error) {
+      console.error('TaskModal: Error updating task:', error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleDelete = (e: React.MouseEvent) => {
@@ -91,7 +146,15 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     }
   };
 
-  const isCompleted = task.completedAt !== undefined;
+  const formatDate = (date: Date) => {
+    return format(date, 'MMM dd, yyyy');
+  };
+
+  const formatTime = (date: Date) => {
+    return format(date, 'h:mm a');
+  };
+
+  const isCompleted = task.status === 'completed';
   const isOverdue = task.deadline && new Date(task.deadline) < new Date();
 
   return (
@@ -111,23 +174,22 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       }}
     >
       <div 
-        className="bg-white rounded-2xl shadow-2xl w-full mx-4 transform transition-all duration-300 scale-100"
+        className="bg-white rounded-xl shadow-2xl w-full mx-4 transform transition-all duration-300 scale-100"
         style={{ 
           boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
           backgroundColor: 'rgba(255, 255, 255, 0.98)',
-          maxWidth: '90vw',
-          maxHeight: '90vh'
+          maxWidth: '60vw',
+          maxHeight: '85vh'
         }}
         onClick={(e) => {
           e.preventDefault();
-          e.stopPropagation();
         }}
       >
         {/* Header */}
-        <div className="flex justify-between items-center p-6 md:p-8 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-t-2xl">
+        <div className="flex justify-between items-center p-4 md:p-6 border-b border-gray-100 bg-gradient-to-r from-green-50 to-emerald-50 rounded-t-xl">
           <div>
-            <h2 className="text-xl md:text-2xl font-bold text-gray-800 mb-1">Task Details</h2>
-            <p className="text-xs md:text-sm text-gray-600">Edit your task information</p>
+            <h2 className="text-lg md:text-xl font-bold text-gray-800 mb-1">Edit Task</h2>
+            <p className="text-xs text-gray-600">Update task details and settings</p>
           </div>
           <button
             onClick={(e) => {
@@ -141,16 +203,16 @@ export const TaskModal: React.FC<TaskModalProps> = ({
         </div>
 
         {/* Content */}
-        <div className="p-4 md:p-8 overflow-y-auto" style={{ maxHeight: 'calc(90vh - 120px)' }}>
-          <form onSubmit={handleSubmit} className="space-y-4 md:space-y-6">
+        <div className="p-4 md:p-6 overflow-y-auto" style={{ maxHeight: 'calc(85vh - 100px)' }}>
+          <form onSubmit={handleSubmit} className="space-y-3 md:space-y-4" id="task-modal-form">
             {/* Desktop Layout - Two Columns */}
-            <div className="hidden md:grid md:grid-cols-2 md:gap-8">
+            <div className="hidden md:grid md:grid-cols-5 md:gap-6">
               {/* Left Column */}
-              <div className="space-y-4 md:space-y-6">
+              <div className="col-span-3 space-y-3 md:space-y-4">
                 {/* Task Title */}
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-3">
-                    Task Title
+                    Task Title *
                   </label>
                   <input
                     type="text"
@@ -159,10 +221,11 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 hover:bg-white"
                     placeholder="Enter task title"
                     required
+                    minLength={1}
                   />
                 </div>
 
-                {/* Task Description */}
+                {/* Description */}
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-3">
                     Description
@@ -171,22 +234,71 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 hover:bg-white resize-none"
-                    placeholder="Enter task description"
-                    rows={6}
+                    placeholder="Add task description..."
+                    rows={3}
                   />
                 </div>
+
+                {/* Priority and Label */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-3">
+                      Priority
+                    </label>
+                    <select
+                      value={formData.priority}
+                      onChange={(e) => setFormData({ ...formData, priority: e.target.value as TaskPriority })}
+                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 hover:bg-white"
+                    >
+                      <option value="high">High</option>
+                      <option value="medium">Medium</option>
+                      <option value="low">Low</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-3">
+                      Label
+                    </label>
+                    <select
+                      value={formData.label}
+                      onChange={(e) => setFormData({ ...formData, label: e.target.value as TaskLabel })}
+                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 hover:bg-white"
+                    >
+                      <option value="general">General</option>
+                      <option value="work">Work</option>
+                      <option value="study">Study</option>
+                      <option value="custom">Custom</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Custom Label */}
+                {formData.label === 'custom' && (
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-3">
+                      Custom Label
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.customLabel}
+                      onChange={(e) => setFormData({ ...formData, customLabel: e.target.value })}
+                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 hover:bg-white"
+                      placeholder="Enter custom label"
+                    />
+                  </div>
+                )}
 
                 {/* Duration */}
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-3">
-                    Duration
+                    Duration (Optional)
                   </label>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-2">Hours</label>
                       <input
                         type="number"
-                        value={formData.hours}
+                        value={formData.hours || 0}
                         onChange={(e) => setFormData({ ...formData, hours: parseInt(e.target.value) || 0 })}
                         className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 hover:bg-white"
                         min="0"
@@ -197,7 +309,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                       <label className="block text-xs font-medium text-gray-600 mb-2">Minutes</label>
                       <input
                         type="number"
-                        value={formData.minutes}
+                        value={formData.minutes || 0}
                         onChange={(e) => setFormData({ ...formData, minutes: parseInt(e.target.value) || 0 })}
                         className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 hover:bg-white"
                         min="0"
@@ -206,155 +318,14 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     </div>
                   </div>
                   <div className="mt-3 text-sm text-blue-600 font-medium bg-blue-50 px-3 py-2 rounded-lg">
-                    Total: {formData.hours}h {formData.minutes}m ({(formData.hours * 60) + formData.minutes} minutes)
+                    Total: {formData.hours || 0}h {formData.minutes || 0}m ({(formData.hours || 0) * 60 + (formData.minutes || 0)} minutes)
                   </div>
                 </div>
               </div>
 
               {/* Right Column */}
-              <div className="space-y-4 md:space-y-6">
-                {/* Task Type and Status */}
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-3">
-                      Type
-                    </label>
-                    <select
-                      value={formData.type}
-                      onChange={(e) => setFormData({ ...formData, type: e.target.value as 'regular' | 'important' })}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 hover:bg-white"
-                    >
-                      <option value="regular">Regular</option>
-                      <option value="important">Important</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-3">
-                      Status
-                    </label>
-                    <select
-                      value={formData.status}
-                      onChange={(e) => setFormData({ ...formData, status: e.target.value as TaskStatus })}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 hover:bg-white"
-                    >
-                      <option value="not_complete">Not Complete</option>
-                      <option value="in_progress">In Progress</option>
-                      <option value="completed">Completed</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* Deadline */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-3">
-                    Deadline
-                  </label>
-                  <input
-                    type="date"
-                    value={formData.deadline}
-                    onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 hover:bg-white"
-                  />
-                </div>
-
-                {/* Column */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-3">
-                    Column
-                  </label>
-                  <select
-                    value={formData.column}
-                    onChange={(e) => setFormData({ ...formData, column: e.target.value as ColumnId })}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 hover:bg-white"
-                  >
-                    <option value="Today">Today</option>
-                    <option value="This Week">This Week</option>
-                    <option value="Upcoming task">Upcoming task</option>
-                    <option value="Overdue">Overdue</option>
-                  </select>
-                </div>
-
-                {/* Status Information */}
-                <div className="bg-gradient-to-r from-gray-50 to-blue-50 p-6 rounded-xl border border-gray-100">
-                  <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center">
-                    <span className="w-2 h-2 bg-blue-500 rounded-full mr-3"></span>
-                    Task Information
-                  </h3>
-                  <div className="space-y-3 text-sm">
-                    <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                      <span className="text-gray-600 font-medium">Created:</span>
-                      <span className="text-gray-800 font-semibold">
-                        {format(new Date(task.createdAt), 'MMM dd, yyyy HH:mm')}
-                      </span>
-                    </div>
-                    {task.completedAt && (
-                      <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                        <span className="text-gray-600 font-medium">Completed:</span>
-                        <span className="text-green-600 font-semibold">
-                          {format(new Date(task.completedAt), 'MMM dd, yyyy HH:mm')}
-                        </span>
-                      </div>
-                    )}
-                    {task.deadline && (
-                      <div className="flex justify-between items-center py-2">
-                        <span className="text-gray-600 font-medium">Deadline:</span>
-                        <span className={`font-semibold ${isOverdue ? 'text-red-600' : 'text-gray-800'}`}>
-                          {format(new Date(task.deadline), 'MMM dd, yyyy')}
-                          {isOverdue && ' (Overdue)'}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Mobile Layout - Single Column */}
-            <div className="md:hidden space-y-4">
-              {/* Task Title */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-3">
-                  Task Title
-                </label>
-                <input
-                  type="text"
-                  value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 hover:bg-white"
-                  placeholder="Enter task title"
-                  required
-                />
-              </div>
-
-              {/* Task Description */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-3">
-                  Description
-                </label>
-                <textarea
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 hover:bg-white resize-none"
-                  placeholder="Enter task description"
-                  rows={4}
-                />
-              </div>
-
-              {/* Task Type and Status */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-3">
-                    Type
-                  </label>
-                  <select
-                    value={formData.type}
-                    onChange={(e) => setFormData({ ...formData, type: e.target.value as 'regular' | 'important' })}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 hover:bg-white"
-                  >
-                    <option value="regular">Regular</option>
-                    <option value="important">Important</option>
-                  </select>
-                </div>
+              <div className="col-span-2 space-y-3 md:space-y-4">
+                {/* Status */}
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-3">
                     Status
@@ -369,130 +340,264 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     <option value="completed">Completed</option>
                   </select>
                 </div>
-              </div>
 
-              {/* Duration */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-3">
-                  Duration
-                </label>
-                <div className="grid grid-cols-2 gap-4">
+                {/* Recurrence */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">
+                    Recurrence
+                  </label>
+                  <select
+                    value={formData.recurrence}
+                    onChange={(e) => setFormData({ ...formData, recurrence: e.target.value as 'once' | 'everyday' | 'everyweek' })}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 hover:bg-white"
+                  >
+                    <option value="once">Once</option>
+                    <option value="everyday">Every Day</option>
+                    <option value="everyweek">Every Week</option>
+                  </select>
+                </div>
+
+                {/* Recurrence Day (for weekly) */}
+                {formData.recurrence === 'everyweek' && (
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-2">Hours</label>
-                    <input
-                      type="number"
-                      value={formData.hours}
-                      onChange={(e) => setFormData({ ...formData, hours: parseInt(e.target.value) || 0 })}
+                    <label className="block text-sm font-semibold text-gray-700 mb-3">
+                      Day of Week
+                    </label>
+                    <select
+                      value={formData.recurrenceDay}
+                      onChange={(e) => setFormData({ ...formData, recurrenceDay: e.target.value })}
                       className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 hover:bg-white"
-                      min="0"
-                      max="24"
+                    >
+                      <option value="">Select day</option>
+                      <option value="Monday">Monday</option>
+                      <option value="Tuesday">Tuesday</option>
+                      <option value="Wednesday">Wednesday</option>
+                      <option value="Thursday">Thursday</option>
+                      <option value="Friday">Friday</option>
+                      <option value="Saturday">Saturday</option>
+                      <option value="Sunday">Sunday</option>
+                    </select>
+                  </div>
+                )}
+
+                {/* Recurrence Time */}
+                {(formData.recurrence === 'everyday' || formData.recurrence === 'everyweek') && (
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-3">
+                      Time *
+                    </label>
+                    <input
+                      type="time"
+                      value={formData.recurrenceTime}
+                      onChange={(e) => setFormData({ ...formData, recurrenceTime: e.target.value })}
+                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 hover:bg-white"
+                      required
                     />
                   </div>
+                )}
+
+                {/* Scheduled Date and Time */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">
+                    Scheduled Date
+                  </label>
+                  <input
+                    type="date"
+                    value={formData.scheduledDate}
+                    onChange={(e) => setFormData({ ...formData, scheduledDate: e.target.value })}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 hover:bg-white"
+                  />
+                </div>
+
+                {formData.scheduledDate && (
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-2">Minutes</label>
+                    <label className="block text-sm font-semibold text-gray-700 mb-3">
+                      Scheduled Time
+                    </label>
                     <input
-                      type="number"
-                      value={formData.minutes}
-                      onChange={(e) => setFormData({ ...formData, minutes: parseInt(e.target.value) || 0 })}
+                      type="time"
+                      value={formData.scheduledTime}
+                      onChange={(e) => setFormData({ ...formData, scheduledTime: e.target.value })}
                       className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 hover:bg-white"
-                      min="0"
-                      max="59"
                     />
                   </div>
-                </div>
-                <div className="mt-3 text-sm text-blue-600 font-medium bg-blue-50 px-3 py-2 rounded-lg">
-                  Total: {formData.hours}h {formData.minutes}m ({(formData.hours * 60) + formData.minutes} minutes)
-                </div>
-              </div>
+                )}
 
-              {/* Deadline */}
+                {/* Deadline */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">
+                    Deadline Date
+                  </label>
+                  <input
+                    type="date"
+                    value={formData.deadline}
+                    onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 hover:bg-white"
+                  />
+                </div>
+
+                {formData.deadline && (
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-3">
+                      Deadline Time
+                    </label>
+                    <input
+                      type="time"
+                      value={formData.deadlineTime}
+                      onChange={(e) => setFormData({ ...formData, deadlineTime: e.target.value })}
+                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 hover:bg-white"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Mobile Layout */}
+            <div className="md:hidden space-y-4">
+              {/* Task Title */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-3">
-                  Deadline
+                  Task Title *
                 </label>
                 <input
-                  type="date"
-                  value={formData.deadline}
-                  onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
+                  type="text"
+                  value={formData.title}
+                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                   className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 hover:bg-white"
+                  placeholder="Enter task title"
+                  required
                 />
               </div>
 
-              {/* Column */}
+              {/* Description */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-3">
-                  Column
+                  Description
                 </label>
-                <select
-                  value={formData.column}
-                  onChange={(e) => setFormData({ ...formData, column: e.target.value as ColumnId })}
-                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 hover:bg-white"
-                >
-                  <option value="Today">Today</option>
-                  <option value="This Week">This Week</option>
-                  <option value="Upcoming task">Upcoming task</option>
-                  <option value="Overdue">Overdue</option>
-                </select>
+                <textarea
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 hover:bg-white resize-none"
+                  placeholder="Add task description..."
+                  rows={3}
+                />
               </div>
 
-              {/* Status Information */}
-              <div className="bg-gradient-to-r from-gray-50 to-blue-50 p-6 rounded-xl border border-gray-100">
-                <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center">
-                  <span className="w-2 h-2 bg-blue-500 rounded-full mr-3"></span>
-                  Task Information
-                </h3>
-                <div className="space-y-3 text-sm">
-                  <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                    <span className="text-gray-600 font-medium">Created:</span>
-                    <span className="text-gray-800 font-semibold">
-                      {format(new Date(task.createdAt), 'MMM dd, yyyy HH:mm')}
+              {/* Priority and Label */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">
+                    Priority
+                  </label>
+                  <select
+                    value={formData.priority}
+                    onChange={(e) => setFormData({ ...formData, priority: e.target.value as TaskPriority })}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 hover:bg-white"
+                  >
+                    <option value="high">High</option>
+                    <option value="medium">Medium</option>
+                    <option value="low">Low</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">
+                    Label
+                  </label>
+                  <select
+                    value={formData.label}
+                    onChange={(e) => setFormData({ ...formData, label: e.target.value as TaskLabel })}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 hover:bg-white"
+                  >
+                    <option value="general">General</option>
+                    <option value="work">Work</option>
+                    <option value="study">Study</option>
+                    <option value="custom">Custom</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Status */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-3">
+                  Status
+                </label>
+                <select
+                  value={formData.status}
+                  onChange={(e) => setFormData({ ...formData, status: e.target.value as TaskStatus })}
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 hover:bg-white"
+                >
+                  <option value="not_complete">Not Complete</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="completed">Completed</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Task Information Display */}
+            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">Task Information</h3>
+              <div className="space-y-2 text-sm text-gray-600">
+                <div className="flex justify-between">
+                  <span>Created:</span>
+                  <span>{task.createdAt ? formatDate(new Date(task.createdAt)) : 'N/A'}</span>
+                </div>
+                {task.scheduledDate && (
+                  <div className="flex justify-between">
+                    <span>Scheduled:</span>
+                    <span>
+                      {task.scheduledDate}
+                      {task.scheduledTime && ` at ${task.scheduledTime}`}
                     </span>
                   </div>
-                  {task.completedAt && (
-                    <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                      <span className="text-gray-600 font-medium">Completed:</span>
-                      <span className="text-green-600 font-semibold">
-                        {format(new Date(task.completedAt), 'MMM dd, yyyy HH:mm')}
-                      </span>
-                    </div>
-                  )}
-                  {task.deadline && (
-                    <div className="flex justify-between items-center py-2">
-                      <span className="text-gray-600 font-medium">Deadline:</span>
-                      <span className={`font-semibold ${isOverdue ? 'text-red-600' : 'text-gray-800'}`}>
-                        {format(new Date(task.deadline), 'MMM dd, yyyy')}
-                        {isOverdue && ' (Overdue)'}
-                      </span>
-                    </div>
-                  )}
-                </div>
+                )}
+                {task.deadline && (
+                  <div className="flex justify-between">
+                    <span>Deadline:</span>
+                    <span>{formatDate(new Date(task.deadline))}</span>
+                  </div>
+                )}
+                {task.duration && (
+                  <div className="flex justify-between">
+                    <span>Duration:</span>
+                    <span>
+                      {task.duration >= 60 
+                        ? `${Math.floor(task.duration / 60)}h ${task.duration % 60}m`
+                        : `${task.duration}min`
+                      }
+                    </span>
+                  </div>
+                )}
+                {isCompleted && task.completedAt && (
+                  <div className="flex justify-between">
+                    <span>Completed:</span>
+                    <span>{formatDate(new Date(task.completedAt))}</span>
+                  </div>
+                )}
               </div>
             </div>
 
             {/* Action Buttons */}
-            <div className="flex gap-4 pt-6">
+            <div className="flex gap-3 pt-4">
               <button
-                type="submit"
-                className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3 px-6 rounded-xl hover:from-blue-700 hover:to-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 font-semibold shadow-lg hover:shadow-xl"
+                type="button"
+                disabled={isLoading}
+                onClick={() => {
+                  console.log('Manual submit clicked');
+                  const form = document.getElementById('task-modal-form') as HTMLFormElement;
+                  if (form) {
+                    form.requestSubmit();
+                  }
+                }}
+                className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Save Changes
+                {isLoading ? 'Saving...' : 'Save Changes'}
               </button>
               <button
                 type="button"
                 onClick={handleDelete}
-                className="px-6 py-3 border-2 border-red-300 text-red-600 rounded-xl hover:bg-red-50 hover:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-all duration-200 font-semibold"
+                className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors duration-200"
               >
                 Delete
-              </button>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onClose();
-                }}
-                className="px-6 py-3 border-2 border-gray-300 text-gray-600 rounded-xl hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all duration-200 font-semibold"
-              >
-                Cancel
               </button>
             </div>
           </form>

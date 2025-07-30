@@ -59,6 +59,7 @@ export interface UserProfile {
     sunday: DaySchedule;
   };
   timezone: string;
+  backgroundImage?: string; // Add background image preference
 }
 
 // Gemini AI Types

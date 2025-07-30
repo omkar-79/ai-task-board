@@ -2,17 +2,20 @@
 
 import React, { useState, useEffect } from 'react';
 import { TimezoneSelector } from './TimezoneSelector';
+import { BackgroundSelector } from './BackgroundSelector';
 import { getUserTimezone } from '@/lib/timezone';
 import { profileService } from '@/lib/database';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface SettingsPageProps {
   onClose: () => void;
+  onSettingsChange?: () => void;
 }
 
-export const SettingsPage: React.FC<SettingsPageProps> = ({ onClose }) => {
+export const SettingsPage: React.FC<SettingsPageProps> = ({ onClose, onSettingsChange }) => {
   const { user } = useAuth();
   const [timezone, setTimezone] = useState<string>('America/New_York');
+  const [backgroundImage, setBackgroundImage] = useState<string>('default');
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -29,9 +32,11 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onClose }) => {
       const profile = await profileService.getUserProfile(user.id);
       if (profile) {
         setTimezone(profile.timezone);
+        setBackgroundImage(profile.backgroundImage || 'default');
       } else {
         // Set default timezone if no profile exists
         setTimezone(getUserTimezone());
+        setBackgroundImage('default');
       }
     } catch (error) {
       console.error('Error loading user settings:', error);
@@ -68,14 +73,64 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onClose }) => {
       // Update timezone in database
       await profileService.updateUserProfile(user.id, {
         ...profile!.schedule,
-        timezone: newTimezone
+        timezone: newTimezone,
+        backgroundImage: profile!.backgroundImage
       });
 
       setTimezone(newTimezone);
       setMessage({ type: 'success', text: 'Timezone updated successfully!' });
+      onSettingsChange?.();
     } catch (error) {
       console.error('Error updating timezone:', error);
       setMessage({ type: 'error', text: 'Failed to update timezone' });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleBackgroundChange = async (newBackground: string) => {
+    if (!user) return;
+
+    setIsLoading(true);
+    setMessage(null);
+
+    try {
+      // Get current profile or create default one
+      let profile = await profileService.getUserProfile(user.id);
+      
+      if (!profile) {
+        // Create new profile with default schedule
+        const defaultSchedule = {
+          monday: { workHours: [], sleepHours: { start: '22:00', end: '06:00' } },
+          tuesday: { workHours: [], sleepHours: { start: '22:00', end: '06:00' } },
+          wednesday: { workHours: [], sleepHours: { start: '22:00', end: '06:00' } },
+          thursday: { workHours: [], sleepHours: { start: '22:00', end: '06:00' } },
+          friday: { workHours: [], sleepHours: { start: '22:00', end: '06:00' } },
+          saturday: { workHours: [], sleepHours: { start: '22:00', end: '06:00' } },
+          sunday: { workHours: [], sleepHours: { start: '22:00', end: '06:00' } }
+        };
+        
+        await profileService.upsertUserProfile(user.id, defaultSchedule);
+        profile = await profileService.getUserProfile(user.id);
+      }
+
+      console.log('Saving background to database:', newBackground);
+      
+      // Update background in database
+      await profileService.updateUserProfile(user.id, {
+        ...profile!.schedule,
+        timezone: profile!.timezone,
+        backgroundImage: newBackground
+      });
+      
+      console.log('Background saved successfully');
+
+      setBackgroundImage(newBackground);
+      setMessage({ type: 'success', text: 'Background updated successfully!' });
+      onSettingsChange?.();
+    } catch (error) {
+      console.error('Error updating background:', error);
+      setMessage({ type: 'error', text: 'Failed to update background' });
     } finally {
       setIsLoading(false);
     }
@@ -88,7 +143,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onClose }) => {
         onClick={onClose}
       />
       
-      <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 p-6">
+      <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-4xl mx-4 p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-bold text-gray-800">Settings</h2>
           <button
@@ -99,7 +154,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onClose }) => {
           </button>
         </div>
 
-        <div className="space-y-6">
+        <div className="space-y-8">
           {/* Timezone Section */}
           <div>
             <h3 className="text-lg font-semibold text-gray-700 mb-3">Timezone</h3>
@@ -118,6 +173,14 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onClose }) => {
                 Updating timezone...
               </div>
             )}
+          </div>
+
+          {/* Background Section */}
+          <div>
+            <BackgroundSelector
+              selectedBackground={backgroundImage}
+              onBackgroundChange={handleBackgroundChange}
+            />
           </div>
 
           {/* Message Display */}
