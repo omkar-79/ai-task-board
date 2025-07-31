@@ -46,7 +46,7 @@ const mapTaskRowToTask = (row: TaskRow): Task => {
     }
   }
 
-  return {
+  const taskResult = {
     id: row.id,
     title: row.title,
     description: row.description || undefined,
@@ -66,6 +66,8 @@ const mapTaskRowToTask = (row: TaskRow): Task => {
     scheduledTime: row.scheduled_time ? new Date(row.scheduled_time) : undefined, // Same simple approach as deadline
     scheduledDate: scheduledDate
   };
+
+  return taskResult;
 };
 
 // Convert Task interface to database insert
@@ -201,22 +203,27 @@ export const taskService = {
     console.log('Updating task:', taskId, 'for user:', userId)
     
     try {
-      const updateData: TaskUpdate = {
-        title: updates.title,
-        description: updates.description || null,
-        deadline: updates.deadline?.toISOString() || null,
-        duration: updates.duration || null,
-        priority: updates.priority,
-        label: updates.label,
-        custom_label: updates.customLabel || null,
-        status: updates.status,
-        task_column: updates.column,
-        completed_at: updates.completedAt?.toISOString() || null,
-        recurrence: updates.recurrence || null,
-        recurrence_day: updates.recurrenceDay || null,
-        recurrence_time: updates.recurrenceTimeUTC || null,
-        scheduled_time: updates.scheduledTime ? new Date(`2000-01-01T${updates.scheduledTime}:00`).toISOString() : null
+      // Build update data object with only the fields that are being updated
+      const updateData: Partial<TaskUpdate> = {};
+      
+      if (updates.title !== undefined) updateData.title = updates.title;
+      if (updates.description !== undefined) updateData.description = updates.description || null;
+      if (updates.deadline !== undefined) updateData.deadline = updates.deadline?.toISOString() || null;
+      if (updates.duration !== undefined) updateData.duration = updates.duration || null;
+      if (updates.priority !== undefined) updateData.priority = updates.priority;
+      if (updates.label !== undefined) updateData.label = updates.label;
+      if (updates.customLabel !== undefined) updateData.custom_label = updates.customLabel || null;
+      if (updates.status !== undefined) updateData.status = updates.status;
+      if (updates.column !== undefined) updateData.task_column = updates.column;
+      if (updates.completedAt !== undefined) updateData.completed_at = updates.completedAt?.toISOString() || null;
+      if (updates.recurrence !== undefined) updateData.recurrence = updates.recurrence || null;
+      if (updates.recurrenceDay !== undefined) updateData.recurrence_day = updates.recurrenceDay || null;
+      if (updates.recurrenceTimeUTC !== undefined) updateData.recurrence_time = updates.recurrenceTimeUTC || null;
+      if (updates.scheduledTime !== undefined) {
+        updateData.scheduled_time = updates.scheduledTime?.toISOString() || null;
       }
+
+
 
       const { data, error } = await supabase
         .from('tasks')
@@ -366,13 +373,13 @@ export const profileService = {
   // Update user profile
   async updateUserProfile(userId: string, schedule: any): Promise<UserProfile> {
     console.log('Updating profile for user:', userId)
-    console.log('Schedule data:', schedule)
     
     try {
       const { data, error } = await supabase
         .from('user_profiles')
         .update({ 
           schedule,
+          timezone: schedule.timezone || getUserTimezone(),
           background_image: schedule.backgroundImage || 'default'
         })
         .eq('user_id', userId)

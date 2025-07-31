@@ -12,25 +12,27 @@ import { toZonedTime } from 'date-fns-tz';
 export function determineOnceTaskColumn(task: Task, timezone: string = 'America/New_York'): ColumnId {
   // Priority 1: Check scheduled time
   if (task.scheduledTime) {
-    let scheduledDateTime = toZonedTime(task.scheduledTime, timezone);
+    // Convert both times to the user's timezone for comparison
+    const scheduledTimeInUserTz = toZonedTime(task.scheduledTime, timezone);
+    const currentTimeInUserTz = toZonedTime(new Date(), timezone);
     
-    // Round up by 1 minute if there are seconds (to handle PostgreSQL timestamp precision)
-    if (scheduledDateTime.getSeconds() > 0) {
-      scheduledDateTime = new Date(scheduledDateTime.getTime() + 60000); // Add 1 minute
+    // Round up scheduled time by 1 minute if there are seconds (to handle PostgreSQL timestamp precision)
+    if (scheduledTimeInUserTz.getSeconds() > 0) {
+      scheduledTimeInUserTz.setTime(scheduledTimeInUserTz.getTime() + 60000); // Add 1 minute
     }
     
-    const currentDateTime = getCurrentDateTimeInTimezone(timezone);
-    if (scheduledDateTime < currentDateTime) {
+    // Compare the times (both are now in the user's timezone)
+    if (scheduledTimeInUserTz < currentTimeInUserTz) {
       return 'Overdue';
-    } else if (scheduledDateTime.toDateString() === currentDateTime.toDateString()) {
+    } else if (scheduledTimeInUserTz.toDateString() === currentTimeInUserTz.toDateString()) {
       return 'Today';
     } else {
       // Check if it's this week
-      const startOfWeek = new Date(currentDateTime);
-      startOfWeek.setDate(currentDateTime.getDate() - currentDateTime.getDay() + 1); // Monday
+      const startOfWeek = new Date(currentTimeInUserTz);
+      startOfWeek.setDate(currentTimeInUserTz.getDate() - currentTimeInUserTz.getDay() + 1); // Monday
       const endOfWeek = new Date(startOfWeek);
       endOfWeek.setDate(startOfWeek.getDate() + 6); // Sunday
-      if (scheduledDateTime >= startOfWeek && scheduledDateTime <= endOfWeek) {
+      if (scheduledTimeInUserTz >= startOfWeek && scheduledTimeInUserTz <= endOfWeek) {
         return 'This Week';
       } else {
         return 'Upcoming task';
@@ -39,19 +41,22 @@ export function determineOnceTaskColumn(task: Task, timezone: string = 'America/
   }
   // Priority 2: Check scheduled date only
   if (task.scheduledDate) {
-    const scheduledDate = createUserDate(task.scheduledDate, timezone);
-    const currentDateTime = getCurrentDateTimeInTimezone(timezone);
-    if (scheduledDate < currentDateTime) {
+    // Convert both times to the user's timezone for comparison
+    const scheduledDateInUserTz = createUserDate(task.scheduledDate, timezone);
+    const currentTimeInUserTz = toZonedTime(new Date(), timezone);
+    
+    // Compare the times (both are now in the user's timezone)
+    if (scheduledDateInUserTz < currentTimeInUserTz) {
       return 'Overdue';
-    } else if (scheduledDate.toDateString() === currentDateTime.toDateString()) {
+    } else if (scheduledDateInUserTz.toDateString() === currentTimeInUserTz.toDateString()) {
       return 'Today';
     } else {
       // Check if it's this week
-      const startOfWeek = new Date(currentDateTime);
-      startOfWeek.setDate(currentDateTime.getDate() - currentDateTime.getDay() + 1); // Monday
+      const startOfWeek = new Date(currentTimeInUserTz);
+      startOfWeek.setDate(currentTimeInUserTz.getDate() - currentTimeInUserTz.getDay() + 1); // Monday
       const endOfWeek = new Date(startOfWeek);
       endOfWeek.setDate(startOfWeek.getDate() + 6); // Sunday
-      if (scheduledDate >= startOfWeek && scheduledDate <= endOfWeek) {
+      if (scheduledDateInUserTz >= startOfWeek && scheduledDateInUserTz <= endOfWeek) {
         return 'This Week';
       } else {
         return 'Upcoming task';
@@ -60,25 +65,27 @@ export function determineOnceTaskColumn(task: Task, timezone: string = 'America/
   }
   // Priority 3: Check deadline
   if (task.deadline) {
-    let deadline = toZonedTime(new Date(task.deadline), timezone);
+    // Convert both times to the user's timezone for comparison
+    const deadlineInUserTz = toZonedTime(task.deadline, timezone);
+    const currentTimeInUserTz = toZonedTime(new Date(), timezone);
     
-    // Round up by 1 minute if there are seconds (to handle PostgreSQL timestamp precision)
-    if (deadline.getSeconds() > 0) {
-      deadline = new Date(deadline.getTime() + 60000); // Add 1 minute
+    // Round up deadline by 1 minute if there are seconds (to handle PostgreSQL timestamp precision)
+    if (deadlineInUserTz.getSeconds() > 0) {
+      deadlineInUserTz.setTime(deadlineInUserTz.getTime() + 60000); // Add 1 minute
     }
     
-    const currentDateTime = getCurrentDateTimeInTimezone(timezone);
-    if (deadline < currentDateTime) {
+    // Compare the times (both are now in the user's timezone)
+    if (deadlineInUserTz < currentTimeInUserTz) {
       return 'Overdue';
-    } else if (deadline.toDateString() === currentDateTime.toDateString()) {
+    } else if (deadlineInUserTz.toDateString() === currentTimeInUserTz.toDateString()) {
       return 'Today';
     } else {
       // Check if it's this week
-      const startOfWeek = new Date(currentDateTime);
-      startOfWeek.setDate(currentDateTime.getDate() - currentDateTime.getDay() + 1); // Monday
+      const startOfWeek = new Date(currentTimeInUserTz);
+      startOfWeek.setDate(currentTimeInUserTz.getDate() - currentTimeInUserTz.getDay() + 1); // Monday
       const endOfWeek = new Date(startOfWeek);
       endOfWeek.setDate(startOfWeek.getDate() + 6); // Sunday
-      if (deadline >= startOfWeek && deadline <= endOfWeek) {
+      if (deadlineInUserTz >= startOfWeek && deadlineInUserTz <= endOfWeek) {
         return 'This Week';
       } else {
         return 'Upcoming task';

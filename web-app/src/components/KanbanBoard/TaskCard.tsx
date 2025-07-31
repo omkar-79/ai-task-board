@@ -210,89 +210,118 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           {(() => {
             const isTodayColumn = columnId === 'Today';
             
-            // Priority 1: Show scheduled time/date if it exists
-            if (task.scheduledTime) {
-              // Convert UTC scheduled time to user's timezone using toZonedTime for better precision
-              const tz = userTimezone || 'America/New_York';
-              let scheduledDate = toZonedTime(task.scheduledTime, tz);
-              
-              // Round up by 1 minute if there are seconds (to handle PostgreSQL timestamp precision)
-              if (scheduledDate.getSeconds() > 0) {
-                scheduledDate = new Date(scheduledDate.getTime() + 60000); // Add 1 minute
-              }
-              
-              if (isTodayColumn) {
-                return (
-                  <div className="flex gap-1 items-center">
-                    <span>🕐</span>
-                    <span>Scheduled task at: {scheduledDate.toLocaleTimeString('en-US', { 
-                      hour: 'numeric', 
-                      minute: '2-digit',
-                      hour12: true 
-                    })}</span>
-                  </div>
-                );
-              } else {
-                return (
-                  <div className="flex gap-1 items-center">
-                    <span>📅</span>
-                    <span>Scheduled task at: {scheduledDate.toLocaleDateString('en-US', { 
-                      month: 'short', 
-                      day: 'numeric',
-                      year: 'numeric'
-                    })}</span>
-                  </div>
-                );
-              }
-            }
+
             
-            // Priority 2: Show deadline time/date if it exists
-            if (task.deadline) {
-              // Convert UTC deadline to user's timezone using toZonedTime for better precision
-              const tz = userTimezone || 'America/New_York';
-              let deadlineDate = toZonedTime(new Date(task.deadline), tz);
-              
-              // Round up by 1 minute if there are seconds (to handle PostgreSQL timestamp precision)
-              if (deadlineDate.getSeconds() > 0) {
-                deadlineDate = new Date(deadlineDate.getTime() + 60000); // Add 1 minute
-              }
-              
-              if (isTodayColumn) {
-                return (
-                  <div className="flex gap-1 items-center">
-                    <span>📅</span>
-                    <span>Deadline: {deadlineDate.toLocaleTimeString('en-US', { 
-                      hour: 'numeric', 
-                      minute: '2-digit',
-                      hour12: true 
-                    })}</span>
-                  </div>
-                );
-              } else {
-                return (
-                  <div className="flex gap-1 items-center">
-                    <span>📅</span>
-                    <span>Deadline: {deadlineDate.toLocaleDateString('en-US', { 
-                      month: 'short', 
-                      day: 'numeric',
-                      year: 'numeric'
-                    })}</span>
-                  </div>
-                );
-              }
-            }
+
+            
+
             
             // Recurrence time display for daily tasks
             if (task.recurrence === 'everyday' && task.recurrenceTimeUTC) {
               const tz = userTimezone || 'America/New_York';
               const localTime = toZonedTime(new Date(task.recurrenceTimeUTC), tz);
-              const displayTime = localTime.toTimeString().slice(0, 5);
+              const displayTime = localTime.toLocaleTimeString('en-US', {
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+              });
               return (
                 <div className="flex gap-1 items-center">
                   <span>🕐</span>
                   <span>Daily at: {displayTime}</span>
                 </div>
               );
+            }
+
+            // Recurrence time display for weekly tasks
+            if (task.recurrence === 'everyweek' && task.recurrenceTimeUTC && task.recurrenceDay) {
+              const tz = userTimezone || 'America/New_York';
+              const localTime = toZonedTime(new Date(task.recurrenceTimeUTC), tz);
+              const displayTime = localTime.toLocaleTimeString('en-US', {
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+              });
+              const dayName = task.recurrenceDay.charAt(0).toUpperCase() + task.recurrenceDay.slice(1);
+              return (
+                <div className="flex gap-1 items-center">
+                  <span>📅</span>
+                  <span>Weekly on {dayName} at: {displayTime}</span>
+                </div>
+              );
+            }
+
+            // Time display for "once" tasks - show either scheduled time or deadline
+            if (task.recurrence === 'once') {
+              const tz = userTimezone || 'America/New_York';
+              
+              // Priority 1: Show scheduled time if it exists
+              if (task.scheduledTime) {
+                let scheduledDate = toZonedTime(task.scheduledTime, tz);
+                
+                // Round up by 1 minute if there are seconds
+                if (scheduledDate.getSeconds() > 0) {
+                  scheduledDate = new Date(scheduledDate.getTime() + 60000);
+                }
+                
+                if (isTodayColumn) {
+                  return (
+                    <div className="flex gap-1 items-center">
+                      <span>🕐</span>
+                      <span>Scheduled at: {scheduledDate.toLocaleTimeString('en-US', {
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        hour12: true
+                      })}</span>
+                    </div>
+                  );
+                } else {
+                  return (
+                    <div className="flex gap-1 items-center">
+                      <span>📅</span>
+                      <span>Scheduled: {scheduledDate.toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric'
+                      })}</span>
+                    </div>
+                  );
+                }
+              }
+              
+              // Priority 2: Show deadline if no scheduled time
+              if (task.deadline) {
+                let deadlineDate = toZonedTime(new Date(task.deadline), tz);
+                
+                // Round up by 1 minute if there are seconds
+                if (deadlineDate.getSeconds() > 0) {
+                  deadlineDate = new Date(deadlineDate.getTime() + 60000);
+                }
+                
+                if (isTodayColumn) {
+                  return (
+                    <div className="flex gap-1 items-center">
+                      <span>📅</span>
+                      <span>Deadline: {deadlineDate.toLocaleTimeString('en-US', {
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        hour12: true
+                      })}</span>
+                    </div>
+                  );
+                } else {
+                  return (
+                    <div className="flex gap-1 items-center">
+                      <span>📅</span>
+                      <span>Deadline: {deadlineDate.toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric'
+                      })}</span>
+                    </div>
+                  );
+                }
+              }
             }
 
             return null;

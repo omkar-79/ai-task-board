@@ -83,13 +83,6 @@ export const AddTaskModal: React.FC<AddTaskModalProps> = ({
     e.stopPropagation();
     
     console.log('🔍 AddTaskModal handleSubmit called!');
-    console.log('🔍 Form data at submission:', {
-      title: formData.title,
-      recurrence: formData.recurrence,
-      recurrenceDay: formData.recurrenceDay,
-      recurrenceTime: formData.recurrenceTime,
-      isEveryweek: formData.recurrence === 'everyweek'
-    });
     
     // Validate required fields
     const validationErrors: string[] = [];
@@ -216,19 +209,8 @@ export const AddTaskModal: React.FC<AddTaskModalProps> = ({
     if ((formData.recurrence === 'everyday' || formData.recurrence === 'everyweek') && formData.recurrenceTime) {
       const tz = userTimezone || 'America/New_York';
       recurrenceTimeUTC = fromZonedTime(`2000-01-01T${formData.recurrenceTime}:00`, tz).toISOString();
-      console.log('🔍 Generated recurrenceTimeUTC:', {
-        recurrence: formData.recurrence,
-        recurrenceTime: formData.recurrenceTime,
-        timezone: tz,
-        recurrenceTimeUTC: recurrenceTimeUTC
-      });
-    } else {
-      console.log('🔍 No recurrenceTimeUTC generated:', {
-        recurrence: formData.recurrence,
-        recurrenceTime: formData.recurrenceTime,
-        hasRecurrenceTime: !!formData.recurrenceTime
-      });
-    }
+
+          }
 
     // Create the task object for column determination (only required fields)
     const taskForColumnDetermination: Task = {
@@ -269,13 +251,7 @@ export const AddTaskModal: React.FC<AddTaskModalProps> = ({
       scheduledTime: formData.scheduledTime ? createUserDateTime(formData.scheduledDate || '2000-01-01', formData.scheduledTime, userTimezone || 'America/New_York') : undefined
     };
 
-    console.log('🔍 Final task object before submission:', {
-      title: newTask.title,
-      recurrence: newTask.recurrence,
-      recurrenceDay: newTask.recurrenceDay,
-      recurrenceTimeUTC: newTask.recurrenceTimeUTC,
-      column: newTask.column
-    });
+
 
     setIsLoading(true);
     try {

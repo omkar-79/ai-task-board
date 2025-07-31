@@ -65,7 +65,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
         scheduledTime: task.scheduledTime ? format(toZonedTime(task.scheduledTime, userTimezone || 'America/New_York'), 'HH:mm') : '',
         recurrence: task.recurrence || 'once',
         recurrenceDay: task.recurrenceDay || '',
-        recurrenceTime: task.recurrenceTimeUTC ? new Date(task.recurrenceTimeUTC).toTimeString().slice(0, 5) : ''
+        recurrenceTime: task.recurrenceTimeUTC ? format(toZonedTime(new Date(task.recurrenceTimeUTC), userTimezone || 'America/New_York'), 'HH:mm') : ''
       });
     }
   }, [task]);

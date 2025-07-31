@@ -12,7 +12,7 @@ export function determineEveryweekTaskColumn(task: Task, timezone: string = 'Ame
   if (!task.recurrenceTimeUTC || !task.recurrenceDay) return 'Overdue';
   
   // Get current time in user's timezone
-  const now = getCurrentDateTimeInTimezone(timezone);
+  const now = toZonedTime(new Date(), timezone);
   
   // Get the recurrence time in user's timezone
   const recurrenceTime = toZonedTime(new Date(task.recurrenceTimeUTC), timezone);
@@ -34,9 +34,6 @@ export function determineEveryweekTaskColumn(task: Task, timezone: string = 'Ame
   
   // Calculate days until the target day
   let daysUntilTarget = targetDayOfWeek - currentDayOfWeek;
-  if (daysUntilTarget < 0) {
-    daysUntilTarget += 7; // Next week
-  }
   
   // Create the next occurrence date
   const nextOccurrence = new Date(now);
@@ -53,11 +50,23 @@ export function determineEveryweekTaskColumn(task: Task, timezone: string = 'Ame
     }
   }
   
-  // If the target day is later this week
-  if (daysUntilTarget > 0 && daysUntilTarget <= 6) {
-    return 'This Week';
+  // If the target day is later this week (tomorrow through Sunday)
+  if (daysUntilTarget > 0) {
+    // Days remaining in current week: 6=Saturday, 0=Sunday, so (6-currentDay+1) includes Sunday
+    const daysRemainingInWeek = 7 - currentDayOfWeek; // Days from tomorrow to Sunday (inclusive)
+    
+    if (daysUntilTarget <= daysRemainingInWeek) {
+      return 'This Week';
+    } else {
+      return 'Upcoming task';
+    }
   }
   
-  // If the target day is next week or later
+  // If the target day was earlier this week, it's next week
+  if (daysUntilTarget < 0) {
+    return 'Upcoming task';
+  }
+  
+  // Fallback
   return 'Upcoming task';
 } 

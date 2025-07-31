@@ -3,7 +3,7 @@
  */
 
 import { convertToTimezone, getTimezoneOffset, getUserTimezone } from './timezone';
-import { toZonedTime } from 'date-fns-tz';
+import { toZonedTime, fromZonedTime } from 'date-fns-tz';
 
 /**
  * Create a date in user's timezone from date and time strings
@@ -13,13 +13,12 @@ import { toZonedTime } from 'date-fns-tz';
  * @returns The date in UTC for storage
  */
 export const createUserDateTime = (dateString: string, timeString: string, timezone: string): Date => {
-  const [year, month, day] = dateString.split('-').map(Number);
-  const [hours, minutes] = timeString.split(':').map(Number);
+  // Create an ISO string in the format that represents the user's intended time
+  const isoString = `${dateString}T${timeString}:00`;
   
-  // Create a Date object directly - this represents the time the user selected
-  const date = new Date(year, month - 1, day, hours, minutes, 0, 0);
-  
-  return date;
+  // Use fromZonedTime to properly create a Date that represents this time in the user's timezone
+  // This will return a UTC Date that, when converted to the user's timezone, shows the correct time
+  return fromZonedTime(isoString, timezone);
 };
 
 /**

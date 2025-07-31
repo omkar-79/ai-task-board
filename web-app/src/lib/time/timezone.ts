@@ -2,6 +2,8 @@
  * Timezone utilities for the task management app
  */
 
+import { fromZonedTime } from 'date-fns-tz';
+
 // Common timezone options
 export const TIMEZONE_OPTIONS = [
   { value: 'America/New_York', label: 'Eastern Time (ET)' },
@@ -74,15 +76,14 @@ export const convertToTimezone = (date: Date, timezone: string): Date => {
  * @returns The date in the specified timezone
  */
 export const createDateInTimezone = (dateString: string, timeString?: string, timezone: string = 'America/New_York'): Date => {
-  const [year, month, day] = dateString.split('-').map(Number);
-  
   if (timeString) {
-    const [hours, minutes] = timeString.split(':').map(Number);
-    const date = new Date(year, month - 1, day, hours, minutes, 0, 0);
-    return convertToTimezone(date, timezone);
+    // Create an ISO string and use fromZonedTime for proper timezone handling
+    const isoString = `${dateString}T${timeString}:00`;
+    return fromZonedTime(isoString, timezone);
   } else {
-    const date = new Date(year, month - 1, day, 0, 0, 0, 0);
-    return convertToTimezone(date, timezone);
+    // For date-only, create at start of day in the specified timezone
+    const isoString = `${dateString}T00:00:00`;
+    return fromZonedTime(isoString, timezone);
   }
 };
 
