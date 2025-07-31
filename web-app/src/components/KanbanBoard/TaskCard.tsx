@@ -6,10 +6,11 @@ import { useDrag } from 'react-dnd';
 import { Task, ColumnId, DragItem, TaskStatus } from '@/lib/types';
 import { format } from 'date-fns';
 import { formatESTDate, getCurrentESTDateTime } from '@/lib/utils';
-import { getCurrentDateTimeInTimezone, createDateInTimezone } from '@/lib/timezone';
+import { getCurrentDateTimeInTimezone, createDateInTimezone, convertToTimezone } from '@/lib/time';
 import { TaskModal } from './TaskModal';
 import { useDrag as useDragContext } from '@/contexts/DragContext';
 import { isBigFrogTask } from '@/lib/bigFrog';
+import { toZonedTime } from 'date-fns-tz';
 
 interface TaskCardProps {
   task: Task;
@@ -61,19 +62,34 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 
   // Determine the relevant date for overdue calculation
   const getRelevantDate = (): Date | null => {
-    // Priority 1: Check scheduled date and time
-    if (task.scheduledDate && task.scheduledTime) {
-      return createDateInTimezone(task.scheduledDate, task.scheduledTime, userTimezone || 'America/New_York');
+    // Priority 1: Check scheduled time
+    if (task.scheduledTime) {
+      let scheduledDate = toZonedTime(task.scheduledTime, userTimezone || 'America/New_York');
+      
+      // Round up by 1 minute if there are seconds (to handle PostgreSQL timestamp precision)
+      if (scheduledDate.getSeconds() > 0) {
+        scheduledDate = new Date(scheduledDate.getTime() + 60000); // Add 1 minute
+      }
+      
+      return scheduledDate;
     }
     
     // Priority 2: Check scheduled date only
     if (task.scheduledDate) {
-      return createDateInTimezone(task.scheduledDate, undefined, userTimezone || 'America/New_York');
+      const scheduledDateString = `${task.scheduledDate}T00:00:00`;
+      return new Date(scheduledDateString);
     }
     
     // Priority 3: Check deadline
     if (task.deadline) {
-      return new Date(task.deadline);
+      let deadlineDate = toZonedTime(new Date(task.deadline), userTimezone || 'America/New_York');
+      
+      // Round up by 1 minute if there are seconds (to handle PostgreSQL timestamp precision)
+      if (deadlineDate.getSeconds() > 0) {
+        deadlineDate = new Date(deadlineDate.getTime() + 60000); // Add 1 minute
+      }
+      
+      return deadlineDate;
     }
     
     return null;
@@ -83,17 +99,6 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   const currentDateTime = getCurrentDateTimeInTimezone(userTimezone || 'America/New_York');
   const isOverdue = relevantDate && relevantDate < currentDateTime;
   
-  console.log('🔍 TaskCard Debug:', {
-    taskTitle: task.title,
-    userTimezone: userTimezone,
-    currentDateTime: currentDateTime.toISOString(),
-    currentDateTimeLocal: currentDateTime.toLocaleString(),
-    relevantDate: relevantDate?.toISOString(),
-    relevantDateLocal: relevantDate?.toLocaleString(),
-    isOverdue: isOverdue,
-    taskDeadline: task.deadline?.toISOString(),
-    taskDeadlineLocal: task.deadline?.toLocaleString()
-  });
   const daysUntilDeadline = relevantDate ? 
     Math.ceil((relevantDate.getTime() - currentDateTime.getTime()) / (1000 * 60 * 60 * 24)) : null;
   const isCompleted = task.status === 'completed';
@@ -206,8 +211,16 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             const isTodayColumn = columnId === 'Today';
             
             // Priority 1: Show scheduled time/date if it exists
-            if (task.scheduledDate && task.scheduledTime) {
-              const scheduledDate = new Date(task.scheduledDate + 'T' + task.scheduledTime);
+            if (task.scheduledTime) {
+              // Convert UTC scheduled time to user's timezone using toZonedTime for better precision
+              const tz = userTimezone || 'America/New_York';
+              let scheduledDate = toZonedTime(task.scheduledTime, tz);
+              
+              // Round up by 1 minute if there are seconds (to handle PostgreSQL timestamp precision)
+              if (scheduledDate.getSeconds() > 0) {
+                scheduledDate = new Date(scheduledDate.getTime() + 60000); // Add 1 minute
+              }
+              
               if (isTodayColumn) {
                 return (
                   <div className="flex gap-1 items-center">
@@ -235,7 +248,15 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             
             // Priority 2: Show deadline time/date if it exists
             if (task.deadline) {
-              const deadlineDate = new Date(task.deadline);
+              // Convert UTC deadline to user's timezone using toZonedTime for better precision
+              const tz = userTimezone || 'America/New_York';
+              let deadlineDate = toZonedTime(new Date(task.deadline), tz);
+              
+              // Round up by 1 minute if there are seconds (to handle PostgreSQL timestamp precision)
+              if (deadlineDate.getSeconds() > 0) {
+                deadlineDate = new Date(deadlineDate.getTime() + 60000); // Add 1 minute
+              }
+              
               if (isTodayColumn) {
                 return (
                   <div className="flex gap-1 items-center">
@@ -261,6 +282,19 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               }
             }
             
+            // Recurrence time display for daily tasks
+            if (task.recurrence === 'everyday' && task.recurrenceTimeUTC) {
+              const tz = userTimezone || 'America/New_York';
+              const localTime = toZonedTime(new Date(task.recurrenceTimeUTC), tz);
+              const displayTime = localTime.toTimeString().slice(0, 5);
+              return (
+                <div className="flex gap-1 items-center">
+                  <span>🕐</span>
+                  <span>Daily at: {displayTime}</span>
+                </div>
+              );
+            }
+
             return null;
           })()}
         </div>

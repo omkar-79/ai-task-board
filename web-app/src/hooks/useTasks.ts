@@ -10,6 +10,7 @@ import {
 import { sortTasksForColumn } from '@/lib/sorting';
 import { taskService } from '@/lib/database';
 import { useAuth } from '@/contexts/AuthContext';
+import { TaskMovementManager } from '@/rendering/taskMovement';
 
 const INITIAL_COLUMNS: Column[] = [
   { id: 'Today', title: 'Today', tasks: [], color: getColumnColor('Today') },
@@ -24,6 +25,9 @@ export const useTasks = (userTimezone: string = 'America/New_York'): UseTasksRet
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
+  
+  // Initialize task movement manager
+  const [movementManager] = useState(() => new TaskMovementManager(userTimezone));
 
   // Load tasks from database on mount and when user changes
   useEffect(() => {
@@ -50,14 +54,47 @@ export const useTasks = (userTimezone: string = 'America/New_York'): UseTasksRet
     loadTasks();
   }, [user]);
 
-  // Update columns whenever tasks change
+  // Update movement manager when timezone changes
   useEffect(() => {
+    movementManager.updateConfig(userTimezone);
+  }, [userTimezone, movementManager]);
+
+  // Update columns whenever tasks change and apply automatic movements
+  useEffect(() => {
+    // Evaluate task movements
+    const movementResults = movementManager.evaluateAllMovements(tasks);
+    
+    // Apply automatic movements if any
+    if (movementResults.movements.length > 0) {
+      console.log('Automatic task movements detected:', movementResults.movements);
+      
+      // Update tasks with new columns
+      const updatedTasks = tasks.map(task => {
+        const movement = movementResults.movements.find(m => m.taskId === task.id);
+        if (movement && movement.moved) {
+          console.log(`Moving task "${task.title}" from ${movement.oldColumn} to ${movement.newColumn}: ${movement.reason}`);
+          
+          // Use the existing moveTask function for automatic movements
+          if (user) {
+            taskService.moveTask(task.id, movement.newColumn, user.id)
+              .catch(err => console.error('Failed to persist automatic movement:', err));
+          }
+          
+          return { ...task, column: movement.newColumn };
+        }
+        return task;
+      });
+      
+      setTasks(updatedTasks);
+    }
+
+    // Update columns with current tasks
     const updatedColumns = INITIAL_COLUMNS.map(column => ({
       ...column,
       tasks: sortTasksForColumn(filterTasksByColumn(tasks, column.id), column.id, userTimezone)
     }));
     setColumns(updatedColumns);
-  }, [tasks, userTimezone]);
+  }, [tasks, userTimezone, movementManager, user]);
 
   const addTask = useCallback(async (taskData: Omit<Task, 'id' | 'createdAt' | 'order'>) => {
     if (!user) {
@@ -68,14 +105,33 @@ export const useTasks = (userTimezone: string = 'America/New_York'): UseTasksRet
     try {
       console.log('Adding task with data:', taskData);
       setError(null);
-      const taskForColumnDetermination = {
+      const taskForColumnDetermination: Task = {
+        id: 'temp-id',
+        title: taskData.title,
+        description: taskData.description,
+        priority: taskData.priority,
+        label: taskData.label,
+        status: taskData.status || 'not_complete',
+        column: taskData.column || 'Today',
+        createdAt: new Date(),
+        order: 0,
+        deadline: taskData.deadline,
+        scheduledDate: taskData.scheduledDate,
+        scheduledTime: taskData.scheduledTime,
+        recurrence: taskData.recurrence,
+        recurrenceDay: taskData.recurrenceDay,
+        recurrenceTimeUTC: taskData.recurrenceTimeUTC
+      };
+      
+      const targetColumn = determineTaskColumn(taskForColumnDetermination, userTimezone);
+      const finalTaskData = {
         ...taskData,
         status: taskData.status || 'not_complete',
-        column: taskData.column || determineTaskColumn(taskData, userTimezone)
+        column: targetColumn
       };
       
       console.log('Task for column determination:', taskForColumnDetermination);
-      const newTask = await taskService.createTask(taskForColumnDetermination, user.id);
+      const newTask = await taskService.createTask(finalTaskData, user.id);
       console.log('Successfully created task:', newTask);
       setTasks(prev => [...prev, newTask]);
     } catch (err) {
@@ -83,7 +139,7 @@ export const useTasks = (userTimezone: string = 'America/New_York'): UseTasksRet
       setError('Failed to add task to database');
       throw err; // Re-throw so the UI can handle it
     }
-  }, [user]);
+  }, [user, userTimezone]);
 
   const updateTask = useCallback(async (taskId: string, updates: Partial<Task>) => {
     if (!user) {

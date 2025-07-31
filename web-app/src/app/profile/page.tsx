@@ -6,12 +6,15 @@ import { taskService } from '@/lib/database';
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import Link from 'next/link';
+import { createDateInTimezone, getUserTimezone, convertToTimezone } from '@/lib/time';
+import { toZonedTime } from 'date-fns-tz';
 
 export default function ProfilePage() {
   const [completedTasks, setCompletedTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user, signOut } = useAuth();
+  const userTimezone = getUserTimezone();
 
   useEffect(() => {
     const loadCompletedTasks = async () => {
@@ -43,15 +46,27 @@ export default function ProfilePage() {
   };
 
   const getTaskDisplayInfo = (task: Task) => {
-    if (task.scheduledDate && task.scheduledTime) {
-      const scheduledDate = new Date(task.scheduledDate + 'T' + task.scheduledTime);
+    if (task.scheduledTime) {
+      let scheduledDate = toZonedTime(task.scheduledTime, userTimezone || 'America/New_York');
+      
+      // Round up by 1 minute if there are seconds (to handle PostgreSQL timestamp precision)
+      if (scheduledDate.getSeconds() > 0) {
+        scheduledDate = new Date(scheduledDate.getTime() + 60000); // Add 1 minute
+      }
+      
       return {
         type: 'Scheduled',
         date: formatDate(scheduledDate),
         time: formatTime(scheduledDate)
       };
     } else if (task.deadline) {
-      const deadlineDate = new Date(task.deadline);
+      let deadlineDate = toZonedTime(new Date(task.deadline), userTimezone);
+      
+      // Round up by 1 minute if there are seconds (to handle PostgreSQL timestamp precision)
+      if (deadlineDate.getSeconds() > 0) {
+        deadlineDate = new Date(deadlineDate.getTime() + 60000); // Add 1 minute
+      }
+      
       return {
         type: 'Deadline',
         date: formatDate(deadlineDate),

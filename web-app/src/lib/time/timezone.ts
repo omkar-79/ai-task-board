@@ -98,31 +98,49 @@ export const getCurrentDateTimeInTimezone = (timezone: string): Date => {
     const timeString = now.toLocaleString('en-US', { timeZone: timezone });
     
     // Parse the time string to get the current time in that timezone
-    const [datePart, timePart] = timeString.split(', ');
-    const [month, day, year] = datePart.split('/');
-    const [time, period] = timePart.split(' ');
-    const [hours, minutes, seconds] = time.split(':');
+    const parts = timeString.split(', ');
+    if (parts.length >= 2) {
+      const datePart = parts[0];
+      const timePart = parts[1];
+      
+      // Parse the date part (MM/DD/YYYY)
+      const dateParts = datePart.split('/');
+      const month = parseInt(dateParts[0]) - 1; // Month is 0-indexed
+      const day = parseInt(dateParts[1]);
+      const year = parseInt(dateParts[2]);
+      
+      // Parse the time part (HH:MM:SS AM/PM)
+      const timeParts = timePart.split(' ');
+      const timeComponents = timeParts[0].split(':');
+      let hours = parseInt(timeComponents[0]);
+      const minutes = parseInt(timeComponents[1]);
+      const seconds = parseInt(timeComponents[2] || '0');
+      const period = timeParts[1];
+      
+      // Convert to 24-hour format
+      if (period === 'PM' && hours !== 12) {
+        hours += 12;
+      } else if (period === 'AM' && hours === 12) {
+        hours = 0;
+      }
+      
+      return new Date(year, month, day, hours, minutes, seconds);
+    }
     
-    let hour = parseInt(hours);
-    if (period === 'PM' && hour !== 12) hour += 12;
-    if (period === 'AM' && hour === 12) hour = 0;
-    
-    // Create date in the target timezone
-    const targetDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), hour, parseInt(minutes), parseInt(seconds));
-    
-    return targetDate;
+    // Fallback to current time
+    return new Date();
   } catch (error) {
     console.warn(`Could not get current time in timezone ${timezone}:`, error);
-    return new Date(); // Fallback to local time
+    return new Date();
   }
 };
 
 /**
- * Format a date for display in a specific timezone
+ * Format a date in a specific timezone
  * @param date - The date to format
  * @param timezone - The timezone to format in
- * @param format - The format to use ('date', 'time', 'datetime')
- * @returns Formatted date string
+ * @param format - The format type
+ * @returns The formatted date string
  */
 export const formatDateInTimezone = (
   date: Date, 
@@ -133,27 +151,29 @@ export const formatDateInTimezone = (
     const options: Intl.DateTimeFormatOptions = {
       timeZone: timezone,
     };
-
+    
     switch (format) {
       case 'date':
         options.year = 'numeric';
-        options.month = '2-digit';
-        options.day = '2-digit';
+        options.month = 'short';
+        options.day = 'numeric';
         break;
       case 'time':
-        options.hour = '2-digit';
+        options.hour = 'numeric';
         options.minute = '2-digit';
+        options.hour12 = true;
         break;
       case 'datetime':
         options.year = 'numeric';
-        options.month = '2-digit';
-        options.day = '2-digit';
-        options.hour = '2-digit';
+        options.month = 'short';
+        options.day = 'numeric';
+        options.hour = 'numeric';
         options.minute = '2-digit';
+        options.hour12 = true;
         break;
     }
-
-    return new Intl.DateTimeFormat('en-US', options).format(date);
+    
+    return date.toLocaleString('en-US', options);
   } catch (error) {
     console.warn(`Could not format date in timezone ${timezone}:`, error);
     return date.toLocaleString();
@@ -164,45 +184,46 @@ export const formatDateInTimezone = (
  * Check if a date is today in a specific timezone
  * @param date - The date to check
  * @param timezone - The timezone to check in
- * @returns True if the date is today in the timezone
+ * @returns True if the date is today
  */
 export const isTodayInTimezone = (date: Date, timezone: string): boolean => {
   const today = getCurrentDateTimeInTimezone(timezone);
-  const dateInTimezone = convertToTimezone(date, timezone);
-  
-  return (
-    dateInTimezone.getFullYear() === today.getFullYear() &&
-    dateInTimezone.getMonth() === today.getMonth() &&
-    dateInTimezone.getDate() === today.getDate()
-  );
+  return date.toDateString() === today.toDateString();
 };
 
 /**
  * Check if a date is overdue in a specific timezone
  * @param date - The date to check
  * @param timezone - The timezone to check in
- * @returns True if the date is overdue in the timezone
+ * @returns True if the date is overdue
  */
 export const isOverdueInTimezone = (date: Date, timezone: string): boolean => {
   const now = getCurrentDateTimeInTimezone(timezone);
-  const dateInTimezone = convertToTimezone(date, timezone);
-  return dateInTimezone < now;
+  return date < now;
 };
 
 /**
- * Get timezone display name
+ * Get the display name for a timezone
  * @param timezone - The timezone identifier
- * @returns The display name for the timezone
+ * @returns The display name
  */
 export const getTimezoneDisplayName = (timezone: string): string => {
-  const option = TIMEZONE_OPTIONS.find(opt => opt.value === timezone);
-  return option ? option.label : timezone;
+  try {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      timeZoneName: 'long'
+    });
+    return formatter.formatToParts(new Date())
+      .find(part => part.type === 'timeZoneName')?.value || timezone;
+  } catch (error) {
+    return timezone;
+  }
 };
 
 /**
- * Validate if a timezone is supported
- * @param timezone - The timezone to validate
- * @returns True if the timezone is supported
+ * Check if a timezone is valid
+ * @param timezone - The timezone identifier
+ * @returns True if the timezone is valid
  */
 export const isValidTimezone = (timezone: string): boolean => {
   try {

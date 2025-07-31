@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { TIMEZONE_OPTIONS, getTimezoneDisplayName } from '@/lib/timezone';
+import { TIMEZONE_OPTIONS, getTimezoneDisplayName } from '@/lib/time';
 
 interface TimezoneSelectorProps {
   currentTimezone: string;

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Task, TaskPriority, TaskLabel, TaskRecurrence, ColumnId } from '@/lib/types';
 import { determineTaskColumn, createUserDateTime, createUserDate } from '@/lib/utils';
+import { fromZonedTime } from 'date-fns-tz';
 
 interface AddTaskModalProps {
   isOpen: boolean;
@@ -82,6 +83,13 @@ export const AddTaskModal: React.FC<AddTaskModalProps> = ({
     e.stopPropagation();
     
     console.log('🔍 AddTaskModal handleSubmit called!');
+    console.log('🔍 Form data at submission:', {
+      title: formData.title,
+      recurrence: formData.recurrence,
+      recurrenceDay: formData.recurrenceDay,
+      recurrenceTime: formData.recurrenceTime,
+      isEveryweek: formData.recurrence === 'everyweek'
+    });
     
     // Validate required fields
     const validationErrors: string[] = [];
@@ -203,12 +211,41 @@ export const AddTaskModal: React.FC<AddTaskModalProps> = ({
       taskDeadlineLocal: taskDeadline?.toLocaleDateString()
     });
 
+    // Generate recurrenceTimeUTC for daily and weekly tasks
+    let recurrenceTimeUTC: string | undefined = undefined;
+    if ((formData.recurrence === 'everyday' || formData.recurrence === 'everyweek') && formData.recurrenceTime) {
+      const tz = userTimezone || 'America/New_York';
+      recurrenceTimeUTC = fromZonedTime(`2000-01-01T${formData.recurrenceTime}:00`, tz).toISOString();
+      console.log('🔍 Generated recurrenceTimeUTC:', {
+        recurrence: formData.recurrence,
+        recurrenceTime: formData.recurrenceTime,
+        timezone: tz,
+        recurrenceTimeUTC: recurrenceTimeUTC
+      });
+    } else {
+      console.log('🔍 No recurrenceTimeUTC generated:', {
+        recurrence: formData.recurrence,
+        recurrenceTime: formData.recurrenceTime,
+        hasRecurrenceTime: !!formData.recurrenceTime
+      });
+    }
+
     // Create the task object for column determination (only required fields)
-    const taskForColumnDetermination = {
+    const taskForColumnDetermination: Task = {
+      id: 'temp-id',
+      title: formData.title,
+      description: formData.description,
       priority: formData.priority,
+      label: formData.label,
+      status: 'not_complete',
+      column: 'Today',
+      createdAt: new Date(),
+      order: 0,
       deadline: taskDeadline,
       scheduledDate: formData.scheduledDate || undefined,
-      scheduledTime: formData.scheduledTime || undefined
+      scheduledTime: formData.scheduledTime ? createUserDateTime(formData.scheduledDate || '2000-01-01', formData.scheduledTime, userTimezone || 'America/New_York') : undefined,
+      recurrence: formData.recurrence,
+      recurrenceTimeUTC: recurrenceTimeUTC
     };
 
     // Use the centralized column determination logic with user's timezone
@@ -227,10 +264,18 @@ export const AddTaskModal: React.FC<AddTaskModalProps> = ({
       status: 'not_complete' as const,
       recurrence: formData.recurrence,
       recurrenceDay: formData.recurrenceDay || undefined,
-      recurrenceTime: formData.recurrenceTime || undefined,
+      recurrenceTimeUTC: recurrenceTimeUTC,
       scheduledDate: formData.scheduledDate || undefined,
-      scheduledTime: formData.scheduledTime || undefined
+      scheduledTime: formData.scheduledTime ? createUserDateTime(formData.scheduledDate || '2000-01-01', formData.scheduledTime, userTimezone || 'America/New_York') : undefined
     };
+
+    console.log('🔍 Final task object before submission:', {
+      title: newTask.title,
+      recurrence: newTask.recurrence,
+      recurrenceDay: newTask.recurrenceDay,
+      recurrenceTimeUTC: newTask.recurrenceTimeUTC,
+      column: newTask.column
+    });
 
     setIsLoading(true);
     try {
@@ -661,7 +706,15 @@ export const AddTaskModal: React.FC<AddTaskModalProps> = ({
                 </label>
                 <select
                   value={formData.recurrence}
-                  onChange={(e) => setFormData({ ...formData, recurrence: e.target.value as TaskRecurrence })}
+                  onChange={(e) => {
+                    const newRecurrence = e.target.value as TaskRecurrence;
+                    console.log('🔍 Recurrence selection changed:', {
+                      from: formData.recurrence,
+                      to: newRecurrence,
+                      isEveryweek: newRecurrence === 'everyweek'
+                    });
+                    setFormData({ ...formData, recurrence: newRecurrence });
+                  }}
                   className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 bg-gray-50 hover:bg-white"
                   required
                   disabled={isLoading}

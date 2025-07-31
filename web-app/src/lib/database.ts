@@ -1,7 +1,8 @@
 import { supabase } from './supabase'
 import { Task, UserProfile } from './types'
 import type { Database } from './supabase'
-import { getUserTimezone } from './timezone'
+import { getUserTimezone, getTimezoneOffset, convertToTimezone } from './time';
+import { toZonedTime } from 'date-fns-tz';
 
 // Database service layer for tasks and user profiles
 // All deadline timestamps are stored in EST timezone
@@ -12,22 +13,36 @@ type TaskUpdate = Database['public']['Tables']['tasks']['Update']
 
 // Convert database row to Task interface
 const mapTaskRowToTask = (row: TaskRow): Task => {
-  let recurrenceTime: string | undefined;
   let recurrenceDay: string | undefined;
+  let recurrenceTimeUTC: string | undefined;
 
   if (row.recurrence_time) {
-    const timestamp = new Date(row.recurrence_time);
-    const timeString = timestamp.toISOString().slice(11, 16); // Extract HH:MM
-    
     if (row.recurrence === 'everyweek') {
-      // For weekly tasks, extract day from timestamp
-      const dayNumber = timestamp.getDay();
-      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-      recurrenceDay = dayNames[dayNumber];
-      recurrenceTime = timeString;
+      // For weekly tasks, use the stored recurrence_day and recurrence_time
+      recurrenceDay = row.recurrence_day || undefined;
+      recurrenceTimeUTC = row.recurrence_time;
     } else {
-      // For daily tasks, just use time
-      recurrenceTime = timeString;
+      // For daily tasks, just store UTC timestamp
+      recurrenceTimeUTC = row.recurrence_time;
+    }
+  }
+
+  // Handle scheduled time for all task types
+  let scheduledDate: string | undefined = undefined;
+  let scheduledTime: string | undefined = undefined;
+  
+  if (row.scheduled_time) {
+    // Treat scheduled_time like deadline - convert UTC to user's timezone
+    const userTimezone = getUserTimezone();
+    const localDateTime = toZonedTime(new Date(row.scheduled_time), userTimezone);
+    
+    if (row.recurrence === 'once') {
+      // For "once" tasks, extract date and time from converted timestamp
+      scheduledDate = localDateTime.toISOString().slice(0, 10); // Extract YYYY-MM-DD
+      scheduledTime = localDateTime.toISOString().slice(11, 16); // Extract HH:MM
+    } else if (row.recurrence === 'everyday' || row.recurrence === 'everyweek') {
+      // For recurring tasks, extract only the time from converted timestamp
+      scheduledTime = localDateTime.toISOString().slice(11, 16); // Extract HH:MM
     }
   }
 
@@ -47,9 +62,9 @@ const mapTaskRowToTask = (row: TaskRow): Task => {
     order: row.order_num,
     recurrence: row.recurrence || undefined,
     recurrenceDay: recurrenceDay || row.recurrence_day || undefined,
-    recurrenceTime: recurrenceTime,
-    scheduledDate: row.scheduled_date ? new Date(row.scheduled_date).toISOString().slice(0, 10) : undefined, // Extract YYYY-MM-DD
-    scheduledTime: row.scheduled_time ? new Date(row.scheduled_time).toISOString().slice(11, 16) : undefined // Extract HH:MM
+    recurrenceTimeUTC: recurrenceTimeUTC,
+    scheduledTime: row.scheduled_time ? new Date(row.scheduled_time) : undefined, // Same simple approach as deadline
+    scheduledDate: scheduledDate
   };
 };
 
@@ -57,22 +72,8 @@ const mapTaskRowToTask = (row: TaskRow): Task => {
 const mapTaskToInsert = (task: Omit<Task, 'id' | 'createdAt' | 'order'>, userId: string): TaskInsert => {
   // Helper function to convert date to ISO string in user's timezone
   const dateToISOString = (date: Date): string => {
-    // Create the date string in the user's timezone
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    const seconds = String(date.getSeconds()).padStart(2, '0');
-    
-    // Get timezone offset in minutes
-    const offsetMinutes = date.getTimezoneOffset();
-    const offsetHours = Math.abs(Math.floor(offsetMinutes / 60));
-    const offsetMinutesRemaining = Math.abs(offsetMinutes % 60);
-    const offsetSign = offsetMinutes <= 0 ? '+' : '-';
-    const offsetString = `${offsetSign}${String(offsetHours).padStart(2, '0')}:${String(offsetMinutesRemaining).padStart(2, '0')}`;
-    
-    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${offsetString}`;
+    // The date should already be in the correct timezone, so just use toISOString()
+    return date.toISOString();
   };
 
   // Helper function to convert date string to ISO string (for scheduled_date)
@@ -80,7 +81,18 @@ const mapTaskToInsert = (task: Omit<Task, 'id' | 'createdAt' | 'order'>, userId:
     return `${dateString}T00:00:00.000Z`;
   };
 
-  return {
+  // Handle scheduled time for all task types
+  let scheduledTime: string | null = null;
+  
+  if (task.recurrence === 'once' && task.scheduledDate && task.scheduledTime) {
+    // For "once" tasks, scheduledTime is now a Date
+    scheduledTime = task.scheduledTime.toISOString();
+  } else if ((task.recurrence === 'everyday' || task.recurrence === 'everyweek') && task.scheduledTime) {
+    // For recurring tasks, scheduledTime is now a Date
+    scheduledTime = task.scheduledTime.toISOString();
+  }
+
+  const result = {
     title: task.title,
     description: task.description || null,
     deadline: task.deadline ? dateToISOString(task.deadline) : null,
@@ -93,17 +105,12 @@ const mapTaskToInsert = (task: Omit<Task, 'id' | 'createdAt' | 'order'>, userId:
     completed_at: task.completedAt ? dateToISOString(task.completedAt) : null,
     recurrence: task.recurrence || null,
     recurrence_day: task.recurrenceDay || null,
-    recurrence_time: task.recurrenceTime ? 
-      (task.recurrence === 'everyweek' && task.recurrenceDay ? 
-        // For weekly tasks, combine day and time into timestamp
-        new Date(`2000-01-${getDayNumber(task.recurrenceDay)}T${task.recurrenceTime}:00`).toISOString() :
-        // For daily tasks, just use time
-        new Date(`2000-01-01T${task.recurrenceTime}:00`).toISOString()
-      ) : null,
-    scheduled_date: task.scheduledDate ? dateStringToISO(task.scheduledDate) : null, // Convert date string to timestamp
-    scheduled_time: task.scheduledTime ? new Date(`2000-01-01T${task.scheduledTime}:00`).toISOString() : null, // Convert time string to timestamp
+    recurrence_time: task.recurrenceTimeUTC || null,
+    scheduled_time: scheduledTime,
     user_id: userId
   };
+
+  return result;
 };
 
 // Helper function to convert day name to day number
@@ -116,8 +123,6 @@ const getDayNumber = (dayName: string): number => {
 export const taskService = {
   // Get all tasks for a user
   async getTasks(userId: string): Promise<Task[]> {
-    console.log('Fetching tasks for user:', userId)
-    
     try {
       const { data, error } = await supabase
         .from('tasks')
@@ -136,7 +141,6 @@ export const taskService = {
         throw new Error(`Failed to fetch tasks: ${error.message}`)
       }
 
-      console.log('Successfully fetched tasks:', data?.length || 0)
       return data.map(mapTaskRowToTask)
     } catch (err) {
       console.error('Exception in getTasks:', err)
@@ -146,8 +150,6 @@ export const taskService = {
 
   // Get tasks by column
   async getTasksByColumn(userId: string, column: string): Promise<Task[]> {
-    console.log('Fetching tasks for column:', column, 'user:', userId)
-    
     try {
       const { data, error } = await supabase
         .from('tasks')
@@ -171,36 +173,26 @@ export const taskService = {
 
   // Create a new task
   async createTask(task: Omit<Task, 'id' | 'createdAt' | 'order'>, userId: string): Promise<Task> {
-    console.log('Creating task for user:', userId)
-    console.log('Task data received:', task)
-    console.log('Task deadline:', task.deadline?.toISOString())
-    console.log('Task deadline local:', task.deadline?.toLocaleDateString())
-    
     try {
-      const insertData = mapTaskToInsert(task, userId)
-      console.log('Insert data:', insertData)
-      console.log('Insert deadline:', insertData.deadline)
+      const insertData = mapTaskToInsert(task, userId);
       
       const { data, error } = await supabase
         .from('tasks')
         .insert(insertData)
         .select()
-        .single()
+        .single();
 
       if (error) {
-        console.error('Error creating task:', error)
-        throw new Error(`Failed to create task: ${error.message}`)
+        console.error('Error creating task:', error);
+        throw new Error(`Failed to create task: ${error.message}`);
       }
 
-      console.log('Successfully created task:', data.id)
-      console.log('Database deadline:', data.deadline)
-      const mappedTask = mapTaskRowToTask(data)
-      console.log('Mapped task deadline:', mappedTask.deadline?.toISOString())
-      console.log('Mapped task deadline local:', mappedTask.deadline?.toLocaleDateString())
-      return mappedTask
+      console.log('Successfully created task:', data.id);
+      
+      return mapTaskRowToTask(data);
     } catch (err) {
-      console.error('Exception in createTask:', err)
-      throw err
+      console.error('Exception in createTask:', err);
+      throw err;
     }
   },
 
@@ -222,9 +214,8 @@ export const taskService = {
         completed_at: updates.completedAt?.toISOString() || null,
         recurrence: updates.recurrence || null,
         recurrence_day: updates.recurrenceDay || null,
-        recurrence_time: updates.recurrenceTime ? new Date(`2000-01-01T${updates.recurrenceTime}:00`).toISOString() : null, // Convert HH:MM to timestamp
-        scheduled_date: updates.scheduledDate ? new Date(`${updates.scheduledDate}T00:00:00`).toISOString() : null, // Convert date string to timestamp
-        scheduled_time: updates.scheduledTime ? new Date(`2000-01-01T${updates.scheduledTime}:00`).toISOString() : null // Convert time string to timestamp
+        recurrence_time: updates.recurrenceTimeUTC || null,
+        scheduled_time: updates.scheduledTime ? new Date(`2000-01-01T${updates.scheduledTime}:00`).toISOString() : null
       }
 
       const { data, error } = await supabase

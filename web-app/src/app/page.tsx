@@ -8,8 +8,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { AuthContainer } from '@/components/auth/AuthContainer';
 import { SettingsPage } from '@/components/settings/SettingsPage';
 import { BigFrogInfo } from '@/components/KanbanBoard/BigFrogInfo';
+import { MovementDebug } from '@/components/KanbanBoard/MovementDebug';
 import { profileService } from '@/lib/database';
-import { getUserTimezone } from '@/lib/timezone';
+import { getUserTimezone } from '@/lib/time';
 import { getBigFrogTasks } from '@/lib/bigFrog';
 import Link from 'next/link';
 
@@ -27,7 +28,8 @@ export default function Dashboard() {
     deleteTask, 
     moveTask, 
     loading: tasksLoading, 
-    error 
+    error,
+    tasks
   } = useTasks(userTimezone);
 
   // Load user settings on mount and when settings change
@@ -109,7 +111,7 @@ export default function Dashboard() {
           <div className="flex justify-between items-center mb-6">
             <div>
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-800">
-                Karya
+                Hoply
               </h1>
 
             </div>
@@ -144,8 +146,6 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* Big Frog Info */}
-          <BigFrogInfo bigFrogTasks={getBigFrogTasks(columns)} />
 
           <KanbanBoard
             columns={columns}
@@ -155,6 +155,9 @@ export default function Dashboard() {
             onAddTask={addTask}
             userTimezone={userTimezone}
           />
+          
+          {/* Debug component for movement system */}
+          <MovementDebug tasks={tasks} userTimezone={userTimezone} />
 
           {showSettings && (
             <SettingsPage 

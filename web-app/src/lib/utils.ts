@@ -1,4 +1,5 @@
 import { format, isToday, isThisWeek, startOfWeek, endOfWeek, addDays } from 'date-fns';
+import { toZonedTime } from 'date-fns-tz';
 import { Task, ColumnId, TimeBlock, DaySchedule, UserProfile, TaskPriority } from './types';
 import { sortTasksByPriority } from './sorting';
 import { 
@@ -7,7 +8,10 @@ import {
   isTodayInTimezone, 
   isOverdueInTimezone,
   convertToTimezone
-} from './timezone';
+} from './time';
+import { determineOnceTaskColumn } from '../algorithms/oncePlacement';
+import { determineEverydayTaskColumn } from '../algorithms/everydayPlacement';
+import { determineEveryweekTaskColumn } from '../algorithms/everyweekPlacement';
 
 // Timezone-aware utilities
 export const EST_TIMEZONE_OFFSET = -5; // EST is UTC-5
@@ -102,149 +106,16 @@ export const minutesToTime = (minutes: number): string => {
 };
 
 // Task Categorization Logic
-export const determineTaskColumn = (
-  task: Pick<Task, 'scheduledDate' | 'scheduledTime' | 'deadline' | 'priority'>, 
-  timezone: string = 'America/New_York',
-  currentDate: Date = getCurrentDateTimeInTimezone(timezone)
-): ColumnId => {
-  console.log('🔍 determineTaskColumn Debug - Input:', {
-    task,
-    timezone,
-    currentDate: currentDate.toISOString()
-  });
-  
-  // Use user's timezone for current date comparison
-  const today = getCurrentDateTimeInTimezone(timezone);
-  today.setHours(0, 0, 0, 0); // Start of today in user's timezone
-  
-  console.log('🔍 determineTaskColumn Debug - Today in timezone:', {
-    today: today.toISOString(),
-    todayLocal: today.toLocaleString()
-  });
-  
-  // Get current week boundaries (Monday to Sunday)
-  const currentDay = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
-  const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1; // Convert to Monday-based week
-  
-  const startOfWeek = new Date(today);
-  startOfWeek.setDate(today.getDate() - daysFromMonday); // Monday of current week
-  startOfWeek.setHours(0, 0, 0, 0);
-  
-  const endOfWeek = new Date(startOfWeek);
-  endOfWeek.setDate(startOfWeek.getDate() + 6); // Sunday of current week
-  endOfWeek.setHours(23, 59, 59, 999);
-  
-  // Helper function to check if a date is today in user's timezone
-  const isToday = (date: Date): boolean => {
-    return isTodayInTimezone(date, timezone);
-  };
-  
-  // Helper function to check if a date is this week (but not today)
-  const isThisWeek = (date: Date): boolean => {
-    return date >= startOfWeek && date <= endOfWeek && !isToday(date);
-  };
-  
-  // Helper function to check if a date is overdue in user's timezone
-  const isOverdue = (date: Date): boolean => {
-    return isOverdueInTimezone(date, timezone);
-  };
-  
-  // Helper function to check if a date is upcoming (after this week)
-  const isUpcoming = (date: Date): boolean => {
-    return date > endOfWeek;
-  };
-  
-  // Priority 1: Check scheduled date and time (for "once" tasks)
-  if (task.scheduledDate && task.scheduledTime) {
-    const scheduledDateTime = createUserDateTime(task.scheduledDate, task.scheduledTime, timezone);
-    
-    console.log('🔍 Scheduled DateTime Debug:', {
-      scheduledDate: task.scheduledDate,
-      scheduledTime: task.scheduledTime,
-      scheduledDateTime: scheduledDateTime.toISOString(),
-      isToday: isToday(scheduledDateTime),
-      isThisWeek: isThisWeek(scheduledDateTime),
-      isUpcoming: isUpcoming(scheduledDateTime),
-      isOverdue: isOverdue(scheduledDateTime)
-    });
-    
-    if (isOverdue(scheduledDateTime)) {
-      return 'Overdue';
-    } else if (isToday(scheduledDateTime)) {
-      return 'Today';
-    } else if (isThisWeek(scheduledDateTime)) {
-      return 'This Week';
-    } else if (isUpcoming(scheduledDateTime)) {
-      return 'Upcoming task';
-    }
+export function determineTaskColumn(task: Task, timezone: string = 'America/New_York'): ColumnId {
+  if (task.recurrence === 'everyday') {
+    return determineEverydayTaskColumn(task, timezone);
   }
-  
-  // Priority 2: Check scheduled date only (without time)
-  if (task.scheduledDate) {
-    const scheduledDate = createUserDate(task.scheduledDate, timezone);
-    
-    if (isOverdue(scheduledDate)) {
-      return 'Overdue';
-    } else if (isToday(scheduledDate)) {
-      return 'Today';
-    } else if (isThisWeek(scheduledDate)) {
-      return 'This Week';
-    } else if (isUpcoming(scheduledDate)) {
-      return 'Upcoming task';
-    }
+  if (task.recurrence === 'everyweek') {
+    return determineEveryweekTaskColumn(task, timezone);
   }
-  
-  // Priority 3: Check deadline
-  if (task.deadline) {
-    // Convert the deadline Date object to timezone-aware date
-    const deadlineDate = convertToTimezone(task.deadline, timezone);
-    
-    console.log('🔍 Deadline Debug:', {
-      deadline: task.deadline,
-      deadlineDate: deadlineDate.toISOString(),
-      deadlineDateLocal: deadlineDate.toLocaleString(),
-      timezone: timezone,
-      isToday: isToday(deadlineDate),
-      isThisWeek: isThisWeek(deadlineDate),
-      isUpcoming: isUpcoming(deadlineDate),
-      isOverdue: isOverdue(deadlineDate)
-    });
-    
-    if (isOverdue(deadlineDate)) {
-      console.log('🔍 Deadline Debug - OVERDUE:', {
-        deadline: task.deadline,
-        deadlineDate: deadlineDate.toISOString(),
-        deadlineDateLocal: deadlineDate.toLocaleString()
-      });
-      return 'Overdue';
-    } else if (isToday(deadlineDate)) {
-      console.log('🔍 Deadline Debug - TODAY:', {
-        deadline: task.deadline,
-        deadlineDate: deadlineDate.toISOString(),
-        deadlineDateLocal: deadlineDate.toLocaleString()
-      });
-      return 'Today';
-    } else if (isThisWeek(deadlineDate)) {
-      console.log('🔍 Deadline Debug - THIS WEEK:', {
-        deadline: task.deadline,
-        deadlineDate: deadlineDate.toISOString(),
-        deadlineDateLocal: deadlineDate.toLocaleString()
-      });
-      return 'This Week';
-    } else if (isUpcoming(deadlineDate)) {
-      console.log('🔍 Deadline Debug - UPCOMING:', {
-        deadline: task.deadline,
-        deadlineDate: deadlineDate.toISOString(),
-        deadlineDateLocal: deadlineDate.toLocaleString()
-      });
-      return 'Upcoming task';
-    }
-  }
-  
-  // Default: If no date information is available, put in Overdue
-  console.log('🔍 Default: No date information found, returning Overdue');
-  return 'Overdue';
-};
+  // Default to once/one-time logic
+  return determineOnceTaskColumn(task, timezone);
+}
 
 // Schedule and Free Time Calculations
 export const calculateFreeTime = (daySchedule: DaySchedule): TimeBlock[] => {

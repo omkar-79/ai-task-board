@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { TimezoneSelector } from './TimezoneSelector';
 import { BackgroundSelector } from './BackgroundSelector';
-import { getUserTimezone } from '@/lib/timezone';
+import { getUserTimezone } from '@/lib/time';
 import { profileService } from '@/lib/database';
 import { useAuth } from '@/contexts/AuthContext';
 

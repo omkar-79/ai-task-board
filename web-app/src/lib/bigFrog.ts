@@ -1,4 +1,5 @@
 import { Task, ColumnId } from './types';
+import { toZonedTime } from 'date-fns-tz';
 
 export interface BigFrogTask {
   taskId: string;
@@ -15,8 +16,9 @@ export interface BigFrogTask {
 export const determineBigFrogTask = (tasks: Task[], columnId: ColumnId): Task | null => {
   if (tasks.length === 0) return null;
 
-  // Filter tasks to only consider high priority tasks
-  const highPriorityTasks = tasks.filter(task => task.priority === 'high');
+  // Filter out completed tasks and only consider high priority tasks
+  const activeTasks = tasks.filter(task => task.status !== 'completed');
+  const highPriorityTasks = activeTasks.filter(task => task.priority === 'high');
   
   if (highPriorityTasks.length === 0) {
     // If no high priority tasks, return null (no Big Frog)
@@ -63,11 +65,22 @@ export const determineBigFrogTask = (tasks: Task[], columnId: ColumnId): Task | 
 
     // Priority 1: Check scheduled date and time
     if (task.scheduledDate && task.scheduledTime) {
-      taskTime = new Date(task.scheduledDate + 'T' + task.scheduledTime);
+      const scheduledDateTimeString = `${task.scheduledDate}T${task.scheduledTime}:00`;
+      let taskTime = toZonedTime(new Date(scheduledDateTimeString), 'America/New_York');
+      
+      // Round up by 1 minute if there are seconds (to handle PostgreSQL timestamp precision)
+      if (taskTime.getSeconds() > 0) {
+        taskTime = new Date(taskTime.getTime() + 60000); // Add 1 minute
+      }
     }
     // Priority 2: Check deadline
     else if (task.deadline) {
-      taskTime = new Date(task.deadline);
+      let taskTime = new Date(task.deadline);
+      
+      // Round up by 1 minute if there are seconds (to handle PostgreSQL timestamp precision)
+      if (taskTime.getSeconds() > 0) {
+        taskTime = new Date(taskTime.getTime() + 60000); // Add 1 minute
+      }
     }
 
     if (taskTime && (!earliestTime || taskTime < earliestTime)) {
@@ -110,7 +123,8 @@ export const getBigFrogTasks = (columns: { id: ColumnId; tasks: Task[] }[]): Big
  * @returns Reason string
  */
 export const getBigFrogReason = (task: Task, allTasks: Task[]): string => {
-  const highPriorityTasks = allTasks.filter(t => t.priority === 'high');
+  const activeTasks = allTasks.filter(t => t.status !== 'completed');
+  const highPriorityTasks = activeTasks.filter(t => t.priority === 'high');
   const tasksWithDuration = highPriorityTasks.filter(t => t.duration && t.duration > 0);
   const maxDuration = Math.max(...tasksWithDuration.map(t => t.duration || 0));
   
@@ -127,7 +141,14 @@ export const getBigFrogReason = (task: Task, allTasks: Task[]): string => {
   if (task.scheduledDate && task.scheduledTime) {
     reason += ` - scheduled for ${task.scheduledDate} at ${task.scheduledTime}`;
   } else if (task.deadline) {
-    reason += ` - deadline ${new Date(task.deadline).toLocaleDateString()}`;
+    let deadlineDate = new Date(task.deadline);
+    
+    // Round up by 1 minute if there are seconds (to handle PostgreSQL timestamp precision)
+    if (deadlineDate.getSeconds() > 0) {
+      deadlineDate = new Date(deadlineDate.getTime() + 60000); // Add 1 minute
+    }
+    
+    reason += ` - deadline ${deadlineDate.toLocaleDateString()}`;
   }
   
   return reason;

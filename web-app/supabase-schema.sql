@@ -16,8 +16,7 @@ CREATE TABLE IF NOT EXISTS public.tasks (
     recurrence TEXT CHECK (recurrence IN ('once', 'everyday', 'everyweek')),
     recurrence_day TEXT,
     recurrence_time TIMESTAMP WITH TIME ZONE, -- Changed from TEXT to TIMESTAMP WITH TIME ZONE
-    scheduled_date TIMESTAMP WITH TIME ZONE, -- For "Once" tasks - when user wants to do it
-    scheduled_time TIMESTAMP WITH TIME ZONE, -- For "Once" tasks - when user wants to do it
+    scheduled_time TIMESTAMP WITH TIME ZONE, -- For "once" tasks: full datetime. For recurring tasks: time only (stored with fixed date 2000-01-01)
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

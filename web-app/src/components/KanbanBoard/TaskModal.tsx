@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { Task, ColumnId, TaskStatus, TaskPriority, TaskLabel } from '@/lib/types';
 import { format } from 'date-fns';
+import { convertToTimezone, createUserDateTime, createUserDate } from '@/lib/time';
+import { toZonedTime } from 'date-fns-tz';
 
 interface TaskModalProps {
   task: Task | null;
@@ -21,7 +23,6 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   onDelete,
   userTimezone
 }) => {
-  console.log('TaskModal: Component rendered, task:', task?.id);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -58,13 +59,13 @@ export const TaskModal: React.FC<TaskModalProps> = ({
         label: task.label || 'general',
         customLabel: task.customLabel || '',
         status: task.status || 'not_complete',
-        deadline: task.deadline ? format(new Date(task.deadline), 'yyyy-MM-dd') : '',
-        deadlineTime: task.deadline ? format(new Date(task.deadline), 'HH:mm') : '',
+        deadline: task.deadline ? format(toZonedTime(new Date(task.deadline), userTimezone || 'America/New_York'), 'yyyy-MM-dd') : '',
+        deadlineTime: task.deadline ? format(toZonedTime(new Date(task.deadline), userTimezone || 'America/New_York'), 'HH:mm') : '',
         scheduledDate: task.scheduledDate || '',
-        scheduledTime: task.scheduledTime || '',
+        scheduledTime: task.scheduledTime ? format(toZonedTime(task.scheduledTime, userTimezone || 'America/New_York'), 'HH:mm') : '',
         recurrence: task.recurrence || 'once',
         recurrenceDay: task.recurrenceDay || '',
-        recurrenceTime: task.recurrenceTime || ''
+        recurrenceTime: task.recurrenceTimeUTC ? new Date(task.recurrenceTimeUTC).toTimeString().slice(0, 5) : ''
       });
     }
   }, [task]);
@@ -87,13 +88,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
-    console.log('TaskModal: handleSubmit STARTED');
     e.preventDefault();
     e.stopPropagation();
-    
-    console.log('TaskModal: handleSubmit called');
-    console.log('TaskModal: formData:', formData);
-    console.log('TaskModal: form valid:', (e.target as HTMLFormElement).checkValidity());
     
     setIsLoading(true);
     
@@ -103,9 +99,10 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       // Create deadline date if both date and time are provided
       let deadline: Date | undefined = undefined;
       if (formData.deadline && formData.deadlineTime) {
-        deadline = new Date(`${formData.deadline}T${formData.deadlineTime}`);
+        // Use timezone-aware date creation to ensure correct timezone handling
+        deadline = createUserDateTime(formData.deadline, formData.deadlineTime, userTimezone || 'America/New_York');
       } else if (formData.deadline) {
-        deadline = new Date(formData.deadline);
+        deadline = createUserDate(formData.deadline, userTimezone || 'America/New_York');
       }
 
       const updates: Partial<Task> = {
@@ -118,18 +115,14 @@ export const TaskModal: React.FC<TaskModalProps> = ({
         status: formData.status,
         deadline,
         scheduledDate: formData.scheduledDate || undefined,
-        scheduledTime: formData.scheduledTime || undefined,
+        scheduledTime: formData.scheduledTime ? createUserDateTime(formData.scheduledDate || '2000-01-01', formData.scheduledTime, userTimezone || 'America/New_York') : undefined,
         recurrence: formData.recurrence,
         recurrenceDay: formData.recurrenceDay || undefined,
-        recurrenceTime: formData.recurrenceTime || undefined
+        recurrenceTimeUTC: formData.recurrenceTime ? new Date(`2000-01-01T${formData.recurrenceTime}:00`).toISOString() : undefined
       };
-
-      console.log('TaskModal: updates to be sent:', updates);
-      console.log('TaskModal: calling onUpdate with taskId:', task.id);
 
       await onUpdate(task.id, updates);
       
-      console.log('TaskModal: onUpdate completed successfully');
       onClose();
     } catch (error) {
       console.error('TaskModal: Error updating task:', error);
@@ -155,7 +148,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   };
 
   const isCompleted = task.status === 'completed';
-  const isOverdue = task.deadline && new Date(task.deadline) < new Date();
+  const isOverdue = task.deadline && toZonedTime(new Date(task.deadline), userTimezone || 'America/New_York') < new Date();
 
   return (
     <div 
@@ -546,14 +539,14 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     <span>Scheduled:</span>
                     <span>
                       {task.scheduledDate}
-                      {task.scheduledTime && ` at ${task.scheduledTime}`}
+                      {task.scheduledTime && ` at ${formatTime(toZonedTime(task.scheduledTime, userTimezone || 'America/New_York'))}`}
                     </span>
                   </div>
                 )}
                 {task.deadline && (
                   <div className="flex justify-between">
                     <span>Deadline:</span>
-                    <span>{formatDate(new Date(task.deadline))}</span>
+                    <span>{formatDate(toZonedTime(new Date(task.deadline), userTimezone || 'America/New_York'))}</span>
                   </div>
                 )}
                 {task.duration && (
@@ -582,7 +575,6 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 type="button"
                 disabled={isLoading}
                 onClick={() => {
-                  console.log('Manual submit clicked');
                   const form = document.getElementById('task-modal-form') as HTMLFormElement;
                   if (form) {
                     form.requestSubmit();

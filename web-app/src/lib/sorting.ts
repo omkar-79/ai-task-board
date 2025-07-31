@@ -1,19 +1,35 @@
 import { Task, ColumnId } from './types';
 import { createUserDateTime, createUserDate } from './utils';
+import { toZonedTime } from 'date-fns-tz';
+import { convertToTimezone } from './time';
 
 /**
  * Get the relevant time for Today column sorting
  * Priority: scheduled time > deadline time
  */
 const getRelevantTime = (task: Task, timezone: string = 'America/New_York'): Date | null => {
-  // Priority 1: Check scheduled date and time
-  if (task.scheduledDate && task.scheduledTime) {
-    return createUserDateTime(task.scheduledDate, task.scheduledTime, timezone);
+  // Priority 1: Check scheduled time
+  if (task.scheduledTime) {
+    let scheduledDate = toZonedTime(task.scheduledTime, timezone);
+    
+    // Round up by 1 minute if there are seconds (to handle PostgreSQL timestamp precision)
+    if (scheduledDate.getSeconds() > 0) {
+      scheduledDate = new Date(scheduledDate.getTime() + 60000); // Add 1 minute
+    }
+    
+    return scheduledDate;
   }
   
   // Priority 2: Check deadline
   if (task.deadline) {
-    return new Date(task.deadline);
+    let deadlineDate = toZonedTime(new Date(task.deadline), timezone);
+    
+    // Round up by 1 minute if there are seconds (to handle PostgreSQL timestamp precision)
+    if (deadlineDate.getSeconds() > 0) {
+      deadlineDate = new Date(deadlineDate.getTime() + 60000); // Add 1 minute
+    }
+    
+    return deadlineDate;
   }
   
   return null;
@@ -31,7 +47,14 @@ const getRelevantDate = (task: Task, timezone: string = 'America/New_York'): Dat
   
   // Priority 2: Check deadline
   if (task.deadline) {
-    return new Date(task.deadline);
+    let deadlineDate = toZonedTime(new Date(task.deadline), timezone);
+    
+    // Round up by 1 minute if there are seconds (to handle PostgreSQL timestamp precision)
+    if (deadlineDate.getSeconds() > 0) {
+      deadlineDate = new Date(deadlineDate.getTime() + 60000); // Add 1 minute
+    }
+    
+    return deadlineDate;
   }
   
   return null;
@@ -108,7 +131,18 @@ export const sortTasksByPriority = (tasks: Task[]): Task[] => {
   return [...tasks].sort((a, b) => {
     // Sort by deadline (earliest first)
     if (a.deadline && b.deadline) {
-      return a.deadline.getTime() - b.deadline.getTime();
+      let aDeadline = toZonedTime(new Date(a.deadline), 'America/New_York');
+      let bDeadline = toZonedTime(new Date(b.deadline), 'America/New_York');
+      
+      // Round up by 1 minute if there are seconds (to handle PostgreSQL timestamp precision)
+      if (aDeadline.getSeconds() > 0) {
+        aDeadline = new Date(aDeadline.getTime() + 60000); // Add 1 minute
+      }
+      if (bDeadline.getSeconds() > 0) {
+        bDeadline = new Date(bDeadline.getTime() + 60000); // Add 1 minute
+      }
+      
+      return aDeadline.getTime() - bDeadline.getTime();
     }
     if (a.deadline && !b.deadline) return -1;
     if (!a.deadline && b.deadline) return 1;

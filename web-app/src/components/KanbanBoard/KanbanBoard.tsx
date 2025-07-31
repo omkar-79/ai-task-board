@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 // Temporarily using basic HTML until Chakra UI v3 is properly configured
 import { ColumnComponent } from './ColumnComponent';
 import { TaskModal } from './TaskModal';
@@ -32,6 +32,13 @@ const KanbanBoardContent: React.FC<KanbanBoardProps> = ({
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isAddingTask, setIsAddingTask] = useState(false);
   const { isDragging } = useDrag();
+
+  // Timer-based state to trigger re-render every minute
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const interval = setInterval(() => setNow(new Date()), 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   const getTasksForColumn = (columnId: ColumnId): Task[] => {
     const column = columns.find(col => col.id === columnId);

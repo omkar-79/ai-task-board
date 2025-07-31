@@ -22,9 +22,9 @@ export interface Task {
   order: number; // for drag and drop ordering
   recurrence?: TaskRecurrence;
   recurrenceDay?: string; // for weekly tasks
-  recurrenceTime?: string; // for weekly tasks
+  recurrenceTimeUTC?: string; // UTC timestamp for daily/weekly tasks
   scheduledDate?: string; // for "Once" tasks - when user wants to do it
-  scheduledTime?: string; // for "Once" tasks - when user wants to do it
+  scheduledTime?: Date; // for all tasks - UTC timestamp like deadline
 }
 
 export interface Column {
