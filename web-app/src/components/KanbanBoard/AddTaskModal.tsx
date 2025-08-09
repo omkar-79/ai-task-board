@@ -4,6 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { Task, TaskPriority, TaskLabel, TaskRecurrence, ColumnId } from '@/lib/types';
 import { determineTaskColumn, createUserDateTime, createUserDate } from '@/lib/utils';
 import { fromZonedTime } from 'date-fns-tz';
+import { useCustomLabels } from '@/hooks/useCustomLabels';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface AddTaskModalProps {
   isOpen: boolean;
@@ -18,6 +20,8 @@ export const AddTaskModal: React.FC<AddTaskModalProps> = ({
   onAddTask,
   userTimezone
 }) => {
+  const { user } = useAuth();
+  const { customLabels, addCustomLabel, error: customLabelsError } = useCustomLabels(user?.id);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -37,6 +41,23 @@ export const AddTaskModal: React.FC<AddTaskModalProps> = ({
 
   const [errors, setErrors] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [showNewLabelInput, setShowNewLabelInput] = useState(false);
+  const [newLabelName, setNewLabelName] = useState('');
+
+  // Handle adding a new custom label
+  const handleAddNewLabel = async () => {
+    if (!newLabelName.trim()) return;
+    
+    try {
+      await addCustomLabel(newLabelName.trim());
+      setNewLabelName('');
+      setShowNewLabelInput(false);
+      // Update form to use the new label
+      setFormData(prev => ({ ...prev, customLabel: newLabelName.trim() }));
+    } catch (error) {
+      console.error('Failed to add custom label:', error);
+    }
+  };
 
   // Reset form when modal opens
   useEffect(() => {
@@ -233,14 +254,29 @@ export const AddTaskModal: React.FC<AddTaskModalProps> = ({
     // Use the centralized column determination logic with user's timezone
     const targetColumn = determineTaskColumn(taskForColumnDetermination, userTimezone || 'America/New_York');
 
+    // Handle custom label selection
+    let finalLabel: TaskLabel = formData.label;
+    let finalCustomLabel: string | undefined = undefined;
+    
+    if (formData.label.startsWith('custom_')) {
+      // User selected an existing custom label
+      finalLabel = 'custom';
+      const labelId = formData.label.replace('custom_', '');
+      const selectedLabel = customLabels.find(label => label.id === labelId);
+      finalCustomLabel = selectedLabel?.label_name;
+    } else if (formData.label === 'custom') {
+      // User selected "Custom" and entered a new label
+      finalCustomLabel = formData.customLabel;
+    }
+
     // Create the final task object with the determined column
     const newTask = {
       title: formData.title,
       description: formData.description,
       duration: totalMinutes > 0 ? totalMinutes : undefined,
       priority: formData.priority,
-      label: formData.label,
-      customLabel: formData.label === 'custom' ? formData.customLabel : undefined,
+      label: finalLabel,
+      customLabel: finalCustomLabel,
       deadline: taskDeadline,
       column: targetColumn,
       status: 'not_complete' as const,
@@ -421,24 +457,88 @@ export const AddTaskModal: React.FC<AddTaskModalProps> = ({
                     <option value="work">Work</option>
                     <option value="study">Study</option>
                     <option value="custom">Custom</option>
+                    {/* Show existing custom labels */}
+                    {customLabels.map(label => (
+                      <option key={label.id} value={`custom_${label.id}`}>
+                        {label.label_name}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
-                {/* Custom Label Input */}
-                {formData.label === 'custom' && (
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Custom Label <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.customLabel}
-                      onChange={(e) => setFormData({ ...formData, customLabel: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 bg-gray-50 hover:bg-white"
-                      placeholder="Enter custom label"
-                      required
-                      disabled={isLoading}
-                    />
+                {/* Custom Label Input - Show when "Custom" is selected or when a custom label is selected */}
+                {(formData.label === 'custom' || formData.label.startsWith('custom_')) && (
+                  <div className="space-y-3">
+                    {/* Show existing custom labels dropdown */}
+                    {customLabels.length > 0 && (
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Select Existing Custom Label
+                        </label>
+                        <select
+                          value={formData.customLabel}
+                          onChange={(e) => setFormData({ ...formData, customLabel: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 bg-gray-50 hover:bg-white"
+                          disabled={isLoading}
+                        >
+                          <option value="">Select a custom label</option>
+                          {customLabels.map(label => (
+                            <option key={label.id} value={label.label_name}>
+                              {label.label_name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {/* Add new custom label */}
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Or Create New Custom Label
+                      </label>
+                      {!showNewLabelInput ? (
+                        <button
+                          type="button"
+                          onClick={() => setShowNewLabelInput(true)}
+                          className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 bg-gray-50 hover:bg-white text-left text-gray-600"
+                          disabled={isLoading}
+                        >
+                          + Add new custom label
+                        </button>
+                      ) : (
+                        <div className="space-y-2">
+                          <input
+                            type="text"
+                            value={newLabelName}
+                            onChange={(e) => setNewLabelName(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 bg-gray-50 hover:bg-white"
+                            placeholder="Enter new custom label"
+                            disabled={isLoading}
+                          />
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={handleAddNewLabel}
+                              className="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700 transition-colors"
+                              disabled={isLoading || !newLabelName.trim()}
+                            >
+                              Add
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowNewLabelInput(false);
+                                setNewLabelName('');
+                              }}
+                              className="px-3 py-1 bg-gray-300 text-gray-700 rounded text-sm hover:bg-gray-400 transition-colors"
+                              disabled={isLoading}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 

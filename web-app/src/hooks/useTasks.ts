@@ -59,6 +59,18 @@ export const useTasks = (userTimezone: string = 'America/New_York'): UseTasksRet
     movementManager.updateConfig(userTimezone);
   }, [userTimezone, movementManager]);
 
+  // Periodic automatic movement check (every minute)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // Force re-evaluation of task movements by triggering the tasks useEffect
+      // This ensures tasks move from "Upcoming task" to "This Week" to "Today" to "Overdue" 
+      // based on time progression
+      setTasks(prev => [...prev]); // Shallow copy to trigger useEffect without changing data
+    }, 60000); // Check every minute
+
+    return () => clearInterval(interval);
+  }, []);
+
   // Update columns whenever tasks change and apply automatic movements
   useEffect(() => {
     // Evaluate task movements

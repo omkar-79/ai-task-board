@@ -101,6 +101,26 @@ export interface Database {
           updated_at?: string
         }
       }
+      custom_labels: {
+        Row: {
+          id: string
+          user_id: string
+          label_name: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          label_name: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          label_name?: string
+          created_at?: string
+        }
+      }
       user_profiles: {
         Row: {
           id: string

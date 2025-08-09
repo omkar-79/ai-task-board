@@ -5,6 +5,8 @@ import { Task, ColumnId, TaskStatus, TaskPriority, TaskLabel } from '@/lib/types
 import { format } from 'date-fns';
 import { convertToTimezone, createUserDateTime, createUserDate } from '@/lib/time';
 import { toZonedTime } from 'date-fns-tz';
+import { useCustomLabels } from '@/hooks/useCustomLabels';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface TaskModalProps {
   task: Task | null;
@@ -23,6 +25,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   onDelete,
   userTimezone
 }) => {
+  const { user } = useAuth();
+  const { customLabels, addCustomLabel } = useCustomLabels(user?.id);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -68,7 +72,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
         recurrenceTime: task.recurrenceTimeUTC ? format(toZonedTime(new Date(task.recurrenceTimeUTC), userTimezone || 'America/New_York'), 'HH:mm') : ''
       });
     }
-  }, [task]);
+  }, [task, userTimezone]);
 
   // Prevent body scroll when modal is open
   useEffect(() => {
@@ -105,13 +109,28 @@ export const TaskModal: React.FC<TaskModalProps> = ({
         deadline = createUserDate(formData.deadline, userTimezone || 'America/New_York');
       }
 
+      // Handle custom label selection
+      let finalLabel: TaskLabel = formData.label;
+      let finalCustomLabel: string | undefined = undefined;
+      
+      if (formData.label.startsWith('custom_')) {
+        // User selected an existing custom label
+        finalLabel = 'custom';
+        const labelId = formData.label.replace('custom_', '');
+        const selectedLabel = customLabels.find(label => label.id === labelId);
+        finalCustomLabel = selectedLabel?.label_name;
+      } else if (formData.label === 'custom') {
+        // User selected "Custom" and entered a new label
+        finalCustomLabel = formData.customLabel;
+      }
+
       const updates: Partial<Task> = {
         title: formData.title,
         description: formData.description,
         duration: totalMinutes > 0 ? totalMinutes : undefined,
         priority: formData.priority,
-        label: formData.label,
-        customLabel: formData.label === 'custom' ? formData.customLabel : undefined,
+        label: finalLabel,
+        customLabel: finalCustomLabel,
         status: formData.status,
         deadline,
         scheduledDate: formData.scheduledDate || undefined,
@@ -175,7 +194,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
           maxHeight: '85vh'
         }}
         onClick={(e) => {
-          e.preventDefault();
+          e.stopPropagation();
         }}
       >
         {/* Header */}
@@ -261,23 +280,53 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                       <option value="work">Work</option>
                       <option value="study">Study</option>
                       <option value="custom">Custom</option>
+                      {/* Show existing custom labels */}
+                      {customLabels.map(label => (
+                        <option key={label.id} value={`custom_${label.id}`}>
+                          {label.label_name}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </div>
 
                 {/* Custom Label */}
-                {formData.label === 'custom' && (
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-3">
-                      Custom Label
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.customLabel}
-                      onChange={(e) => setFormData({ ...formData, customLabel: e.target.value })}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 hover:bg-white"
-                      placeholder="Enter custom label"
-                    />
+                {(formData.label === 'custom' || formData.label.startsWith('custom_')) && (
+                  <div className="space-y-3">
+                    {/* Show existing custom labels dropdown */}
+                    {customLabels.length > 0 && (
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-3">
+                          Select Existing Custom Label
+                        </label>
+                        <select
+                          value={formData.customLabel}
+                          onChange={(e) => setFormData({ ...formData, customLabel: e.target.value })}
+                          className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 hover:bg-white"
+                        >
+                          <option value="">Select a custom label</option>
+                          {customLabels.map(label => (
+                            <option key={label.id} value={label.label_name}>
+                              {label.label_name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {/* Custom label input for new labels */}
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-3">
+                        Custom Label
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.customLabel}
+                        onChange={(e) => setFormData({ ...formData, customLabel: e.target.value })}
+                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 hover:bg-white"
+                        placeholder="Enter custom label"
+                      />
+                    </div>
                   </div>
                 )}
 
@@ -362,13 +411,13 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                       className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 hover:bg-white"
                     >
                       <option value="">Select day</option>
-                      <option value="Monday">Monday</option>
-                      <option value="Tuesday">Tuesday</option>
-                      <option value="Wednesday">Wednesday</option>
-                      <option value="Thursday">Thursday</option>
-                      <option value="Friday">Friday</option>
-                      <option value="Saturday">Saturday</option>
-                      <option value="Sunday">Sunday</option>
+                      <option value="monday">Monday</option>
+                      <option value="tuesday">Tuesday</option>
+                      <option value="wednesday">Wednesday</option>
+                      <option value="thursday">Thursday</option>
+                      <option value="friday">Friday</option>
+                      <option value="saturday">Saturday</option>
+                      <option value="sunday">Sunday</option>
                     </select>
                   </div>
                 )}
@@ -389,58 +438,62 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                   </div>
                 )}
 
-                {/* Scheduled Date and Time */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-3">
-                    Scheduled Date
-                  </label>
-                  <input
-                    type="date"
-                    value={formData.scheduledDate}
-                    onChange={(e) => setFormData({ ...formData, scheduledDate: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 hover:bg-white"
-                  />
-                </div>
+                {/* Scheduled Date and Time - Only for "once" tasks */}
+                {formData.recurrence === 'once' && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-3">
+                        Scheduled Date
+                      </label>
+                      <input
+                        type="date"
+                        value={formData.scheduledDate}
+                        onChange={(e) => setFormData({ ...formData, scheduledDate: e.target.value })}
+                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 hover:bg-white"
+                      />
+                    </div>
 
-                {formData.scheduledDate && (
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-3">
-                      Scheduled Time
-                    </label>
-                    <input
-                      type="time"
-                      value={formData.scheduledTime}
-                      onChange={(e) => setFormData({ ...formData, scheduledTime: e.target.value })}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 hover:bg-white"
-                    />
-                  </div>
-                )}
+                    {formData.scheduledDate && (
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-3">
+                          Scheduled Time
+                        </label>
+                        <input
+                          type="time"
+                          value={formData.scheduledTime}
+                          onChange={(e) => setFormData({ ...formData, scheduledTime: e.target.value })}
+                          className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 hover:bg-white"
+                        />
+                      </div>
+                    )}
 
-                {/* Deadline */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-3">
-                    Deadline Date
-                  </label>
-                  <input
-                    type="date"
-                    value={formData.deadline}
-                    onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 hover:bg-white"
-                  />
-                </div>
+                    {/* Deadline - Only for "once" tasks */}
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-3">
+                        Deadline Date
+                      </label>
+                      <input
+                        type="date"
+                        value={formData.deadline}
+                        onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
+                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 hover:bg-white"
+                      />
+                    </div>
 
-                {formData.deadline && (
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-3">
-                      Deadline Time
-                    </label>
-                    <input
-                      type="time"
-                      value={formData.deadlineTime}
-                      onChange={(e) => setFormData({ ...formData, deadlineTime: e.target.value })}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 hover:bg-white"
-                    />
-                  </div>
+                    {formData.deadline && (
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-3">
+                          Deadline Time
+                        </label>
+                        <input
+                          type="time"
+                          value={formData.deadlineTime}
+                          onChange={(e) => setFormData({ ...formData, deadlineTime: e.target.value })}
+                          className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 hover:bg-white"
+                        />
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -534,16 +587,17 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                   <span>Created:</span>
                   <span>{task.createdAt ? formatDate(new Date(task.createdAt)) : 'N/A'}</span>
                 </div>
-                {task.scheduledDate && (
+                {/* Only show scheduled date/time for "once" tasks and only if it exists */}
+                {task.recurrence === 'once' && (task.scheduledDate || task.scheduledTime) && (
                   <div className="flex justify-between">
                     <span>Scheduled:</span>
                     <span>
-                      {task.scheduledDate}
+                      {task.scheduledDate && task.scheduledDate}
                       {task.scheduledTime && ` at ${formatTime(toZonedTime(task.scheduledTime, userTimezone || 'America/New_York'))}`}
                     </span>
                   </div>
                 )}
-                {task.deadline && (
+                {task.recurrence === 'once' && task.deadline && (
                   <div className="flex justify-between">
                     <span>Deadline:</span>
                     <span>{formatDate(toZonedTime(new Date(task.deadline), userTimezone || 'America/New_York'))}</span>
@@ -557,6 +611,16 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                         ? `${Math.floor(task.duration / 60)}h ${task.duration % 60}m`
                         : `${task.duration}min`
                       }
+                    </span>
+                  </div>
+                )}
+                {task.recurrence && task.recurrence !== 'once' && (
+                  <div className="flex justify-between">
+                    <span>Recurrence:</span>
+                    <span>
+                      {task.recurrence === 'everyday' ? 'Daily' : 'Weekly'}
+                      {task.recurrence === 'everyweek' && task.recurrenceDay && ` on ${task.recurrenceDay.charAt(0).toUpperCase() + task.recurrenceDay.slice(1)}`}
+                      {task.recurrenceTimeUTC && ` at ${formatTime(toZonedTime(new Date(task.recurrenceTimeUTC), userTimezone || 'America/New_York'))}`}
                     </span>
                   </div>
                 )}
