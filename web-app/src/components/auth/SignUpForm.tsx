@@ -36,6 +36,9 @@ export const SignUpForm: React.FC<SignUpFormProps> = ({ onToggleMode }) => {
 
     try {
       await signUp(email, password)
+      setEmail('')
+      setPassword('')
+      setConfirmPassword('')
       setMessage('Check your email for a confirmation link!')
     } catch (error: any) {
       setError(error.message || 'Failed to sign up')

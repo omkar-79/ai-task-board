@@ -15,7 +15,7 @@ import { getBigFrogTasks } from '@/lib/bigFrog';
 import Link from 'next/link';
 
 export default function Dashboard() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, signOut } = useAuth();
   const [userTimezone, setUserTimezone] = useState<string>('America/New_York');
   const [backgroundImage, setBackgroundImage] = useState<string>('default');
   const [showSettings, setShowSettings] = useState(false);
@@ -132,7 +132,7 @@ export default function Dashboard() {
                 ⚙️ Settings
               </button>
               <button
-                onClick={() => useAuth().signOut()}
+                onClick={signOut}
                 className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
               >
                 Sign Out
