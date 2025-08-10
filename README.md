@@ -1,164 +1,53 @@
-# AI Task Board
+## AI Task Board
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white)
+![Node.js](https://img.shields.io/badge/node.js-6DA55F?style=flat&logo=node.js&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=flat&logo=supabase&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-06B6D4?style=flat&logo=tailwindcss&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js-000000?style=flat&logo=next.js&logoColor=white)
+![Material UI](https://img.shields.io/badge/MUI-007FFF?style=flat&logo=mui&logoColor=white)
+![Open Source](https://img.shields.io/badge/Open%20Source-3DA639?style=flat&logo=opensourceinitiative&logoColor=white)
 
-A personal task management web app with AI-powered task categorization and suggestions using Google Gemini API.
 
-## Features
+Your friendly, open-source task board. Drag stuff. Drop stuff. Get things done. Frogs included 🐸
 
-### 🎯 Core Features
-- **6-Column Kanban Board**: Today, This Week, Important, Daily, Pending, Overdue
-- **AI-Powered Categorization**: Automatically categorizes tasks based on deadlines and importance
-- **Drag & Drop**: Move tasks between columns with smooth animations
-- **Task Management**: Create, edit, delete, and complete tasks
-- **Profile Management**: Configure your weekly schedule (work/sleep/free hours)
-- **AI Suggestions**: Get task recommendations for your free time
+### What it is
+- 4-column Kanban: Today, This Week, Upcoming, Overdue
+- Drag & drop with smooth movement logic
+- Tasks with modals, editing, and status changes
+- Auth and profile basics are in place
+- Custom labels, timezone and background settings
 
-### 🤖 AI Integration
-- **Google Gemini API**: Uses Gemini 2.5 Pro for intelligent task categorization
-- **Function Calling**: Structured AI responses for consistent categorization
-- **Smart Suggestions**: AI recommends tasks that fit your available time
-- **Fallback Logic**: Works without AI when API key is not configured
+### Tech (short + sweet)
+- Next.js, React, TypeScript
+- TailwindCSS
+- Supabase
+- React DnD, date-fns
 
-### 🎨 Modern UI/UX
-- **Responsive Design**: Works on mobile, tablet, and desktop
-- **Smooth Animations**: Framer Motion for delightful interactions
-- **Modern Styling**: TailwindCSS with clean, professional design
-- **Accessibility**: Proper ARIA labels and keyboard navigation
-
-## Tech Stack
-
-- **Frontend**: Next.js 15.4.4, React 19.1.0, TypeScript 5
-- **Styling**: TailwindCSS v4, Framer Motion v12.23.9
-- **Drag & Drop**: React DnD v16.0.1
-- **AI Integration**: Google Gemini API (gemini-2.5-pro)
-- **Form Management**: React Hook Form, Zod validation
-- **Date Handling**: date-fns
-- **State Management**: Custom hooks with localStorage persistence
-
-## Getting Started
-
-### Prerequisites
-- Node.js 18+ 
-- npm or yarn
-- Google Gemini API key (optional for AI features)
-
-### Installation
-
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd ai-task-board/web-app
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Set up environment variables** (optional for AI features)
-   ```bash
-   cp env.example .env.local
-   # Edit .env.local and add your Gemini API key
-   ```
-
-4. **Start the development server**
-   ```bash
-   npm run dev
-   ```
-
-5. **Open your browser**
-   Navigate to [http://localhost:3000](http://localhost:3000)
-
-### Getting a Gemini API Key
-
-1. Go to [Google AI Studio](https://makersuite.google.com/app/apikey)
-2. Sign in with your Google account
-3. Create a new API key
-4. Copy the key and add it to your `.env.local` file
-
-## Usage
-
-### Basic Task Management
-1. **Load Sample Data**: Click "Load Sample Data" to see the board in action
-2. **Add Tasks**: Use the task input form (coming soon)
-3. **Move Tasks**: Drag and drop tasks between columns
-4. **Edit Tasks**: Click on task cards to edit details
-5. **Complete Tasks**: Mark tasks as completed
-
-### AI Features
-- **Automatic Categorization**: New tasks are automatically placed in the correct column
-- **Smart Suggestions**: AI recommends tasks for your free time slots
-- **Intelligent Prioritization**: Important tasks are highlighted and prioritized
-
-### Profile Management
-- **Schedule Setup**: Configure your weekly work/sleep/free time
-- **Time Block Management**: Add and edit time blocks for each day
-- **Free Time Calculation**: See your available time for tasks
-
-## Project Structure
-
+### Quick start
+```bash
+git clone <your-repo-url>
+cd ai-task-board/web-app
+npm install
+npm run dev
 ```
-web-app/
-├── src/
-│   ├── app/
-│   │   ├── layout.tsx (providers setup)
-│   │   ├── page.tsx (main dashboard)
-│   │   └── globals.css
-│   ├── components/
-│   │   ├── KanbanBoard/ (coming soon)
-│   │   ├── TaskInput/ (coming soon)
-│   │   ├── ProfileSection/ (coming soon)
-│   │   └── common/
-│   ├── lib/
-│   │   ├── gemini.ts (AI integration)
-│   │   ├── types.ts (TypeScript interfaces)
-│   │   └── utils.ts (utility functions)
-│   └── hooks/
-│       ├── useTasks.ts (task management)
-│       └── useProfile.ts (profile management)
-```
+Open the app at [`http://localhost:3000`](http://localhost:3000).
 
-## Development Status
+If you need environment variables (e.g., Supabase), create a `.env.local` and add your keys. Keep secrets safe.
 
-### ✅ Completed
-- [x] Project foundation and setup
-- [x] TypeScript interfaces and types
-- [x] Utility functions and helpers
-- [x] Custom hooks for state management
-- [x] Gemini AI service integration
-- [x] Main dashboard with sample data
-- [x] Local storage persistence
+### Contributing and community
+- See `CONTRIBUTING.md` for how to get involved
+- Read `CODE_OF_CONDUCT.md` to keep things kind
+- Security issues? Check `SECURITY.md`
 
-### 🔄 In Progress
-- [ ] Kanban board component
-- [ ] Task input form
-- [ ] Profile management section
+### To do (grab an issue and go!)
+- [ ] Wire up Gemini AI suggestions and categorization
+- [ ] Document custom labels and scheduling
+- [ ] E2E tests and CI pipeline
+- [ ] Mobile polish and accessibility pass
+- [ ] Import/export tasks
+- [ ] Issue templates and labels
 
-### 📋 Planned
-- [ ] Drag & drop functionality
-- [ ] AI suggestions integration
-- [ ] Advanced task features
-- [ ] Performance optimization
-- [ ] Testing suite
+### License
+MIT — see `LICENSE`.
 
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](../LICENSE) file for details.
-
-## Support
-
-If you encounter any issues or have questions:
-1. Check the [Issues](../../issues) page
-2. Create a new issue with detailed information
-3. Include your browser, OS, and any error messages
-
----
-
-**Built with ❤️ using Next.js, React, and Google Gemini AI**
+Built with ❤️ by the community. PRs welcome!

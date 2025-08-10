@@ -122,20 +122,59 @@
    - Restart your development server after adding environment variables
    - Check that the variable names match exactly
 
-### Database Schema Verification:
+### Database Schema Verification
 
-Run this query in your Supabase SQL Editor to verify the schema:
+Run these queries in your Supabase SQL Editor to verify the latest schema, RLS, policies, and indexes.
 
+1) Columns and defaults
 ```sql
 SELECT 
   table_name,
   column_name,
   data_type,
-  is_nullable
+  is_nullable,
+  column_default
 FROM information_schema.columns 
 WHERE table_schema = 'public' 
-  AND table_name IN ('tasks', 'user_profiles')
+  AND table_name IN ('tasks', 'user_profiles', 'custom_labels')
 ORDER BY table_name, ordinal_position;
+```
+
+2) RLS enabled
+```sql
+SELECT n.nspname AS schema_name,
+       c.relname  AS table_name,
+       c.relrowsecurity AS rls_enabled
+FROM pg_class c
+JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname = 'public'
+  AND c.relname IN ('tasks', 'user_profiles', 'custom_labels')
+ORDER BY c.relname;
+```
+
+3) Policies present
+```sql
+SELECT schemaname,
+       tablename,
+       policyname,
+       permissive,
+       roles,
+       cmd
+FROM pg_policies
+WHERE schemaname = 'public'
+  AND tablename IN ('tasks', 'user_profiles', 'custom_labels')
+ORDER BY tablename, policyname;
+```
+
+4) Indexes present
+```sql
+SELECT tablename,
+       indexname,
+       indexdef
+FROM pg_indexes
+WHERE schemaname = 'public'
+  AND tablename IN ('tasks', 'user_profiles', 'custom_labels')
+ORDER BY tablename, indexname;
 ```
 
 ## Production Deployment
