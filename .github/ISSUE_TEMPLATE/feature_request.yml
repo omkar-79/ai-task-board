@@ -1,0 +1,32 @@
+name: "✨ Feature request"
+description: Propose an improvement or new feature
+title: "[feat]: "
+labels: ["enhancement"]
+assignees: []
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What pain are we solving?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: Describe the change; include small API/UI sketch if relevant
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope
+      options:
+        - label: Backward compatible
+        - label: Affects docs
+        - label: Needs tests

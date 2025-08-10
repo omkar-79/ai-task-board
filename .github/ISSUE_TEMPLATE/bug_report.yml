@@ -1,0 +1,39 @@
+name: "🐞 Bug report"
+description: Report a reproducible problem
+title: "[bug]: "
+labels: ["bug"]
+assignees: []
+body:
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-flight
+      options:
+        - label: I searched existing issues
+          required: true
+        - label: I’m on the latest main or release
+          required: false
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+      description: Numbered steps, minimal repro if possible
+      placeholder: "1. Go to ...\n2. Click ...\n3. See error ..."
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs Actual
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      placeholder: "OS, Browser, Node.js version"
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / screenshots
+      render: shell
